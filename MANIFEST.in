@@ -1,0 +1,38 @@
+include *.rst
+include *.md
+include coverage.svg
+include pylint.svg
+include LICENSE
+include eztrack/__init__.py
+include *.txt
+
+recursive-include examples *.py
+recursive-include examples *.txt
+recursive-include examples *.rst
+recursive-include eztrack *.py
+recursive-include eztrack *.md
+recursive-include eztrack *.mplstyle
+
+### Exclude
+
+exclude .zenodo
+exclude .github
+exclude .github/PULL_REQUEST_TEMPLATE.md
+exclude Makefile
+exclude ./docs/CONTRIBUTING.md
+exclude ./docs/INSTALLATION.md
+exclude ./docs/TESTING_SETUP.md
+exclude .coveragerc
+exclude *.yml
+exclude .mailmap
+
+recursive-exclude doc *
+recursive-exclude benchmarks *
+recursive-exclude notebooks *
+recursive-exclude tests *
+recursive-exclude data *
+
+exclude eztrack/pipeline/airflow
+exclude eztrack/pipeline/snakemake
+recursive-exclude eztrack/pipeline/airflow *
+recursive-exclude eztrack/pipeline/snakemake *
