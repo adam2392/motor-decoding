@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from mne.decoding import Scaler, Vectorizer
-from mne_bids import make_bids_basename
+from mne_bids import BIDSPath
 from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
@@ -33,7 +33,7 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import resample, check_random_state
 from tqdm import tqdm
 
-from rerf.rerfClassifier import rerfClassifier
+# from rerf.rerfClassifier import rerfClassifier
 
 # Hack-y way to import from files in sibling "io" directory
 sys.path.append(str(Path(__file__).parent.parent / "io"))
@@ -42,72 +42,72 @@ from read import read_label, read_dataset
 from utils import NumpyEncoder
 
 
-def prep_grid(clf, apply_grid):
-    if apply_grid:
-        # parameter grid
-        # Number of trees in random forest
-        n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=5)]
-        # Number of features to consider at every split
-        max_features = ["auto", "sqrt", "log2"]
+# def prep_grid(clf, apply_grid):
+#     if apply_grid:
+#         # parameter grid
+#         # Number of trees in random forest
+#         n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=5)]
+#         # Number of features to consider at every split
+#         max_features = ["auto", "sqrt", "log2"]
 
-        # Maximum number of levels in tree
-        max_depth = [int(x) for x in np.linspace(10, 110, num=5)]
-        max_depth.append(None)
+#         # Maximum number of levels in tree
+#         max_depth = [int(x) for x in np.linspace(10, 110, num=5)]
+#         max_depth.append(None)
 
-        # Minimum number of samples required to split a node
-        min_samples_split = [1, 2, 5, 10]
+#         # Minimum number of samples required to split a node
+#         min_samples_split = [1, 2, 5, 10]
 
-        # For RERF
-        patch_height_min = [2, 3, 4, 5, 10]
-        patch_width_min = [1, 5, 10, 20, 30, 40, 50, 100, 250]
-        patch_height_max = [2, 3, 4, 5, 10, 15]
-        patch_width_max = [10, 20, 30, 40, 50, 100, 250]
+#         # For RERF
+#         patch_height_min = [2, 3, 4, 5, 10]
+#         patch_width_min = [1, 5, 10, 20, 30, 40, 50, 100, 250]
+#         patch_height_max = [2, 3, 4, 5, 10, 15]
+#         patch_width_max = [10, 20, 30, 40, 50, 100, 250]
 
-        # number of iterations to RandomSearchCV
-        n_iter = 100
-    else:
-        n_estimators = [200]
-        max_features = ["auto"]
-        max_depth = [None]
-        min_samples_split = [2]
+#         # number of iterations to RandomSearchCV
+#         n_iter = 100
+#     else:
+#         n_estimators = [200]
+#         max_features = ["auto"]
+#         max_depth = [None]
+#         min_samples_split = [2]
 
-        # For RERF
-        patch_height_min = [2]
-        patch_width_min = [20]
-        patch_height_max = [10]
-        patch_width_max = [50]
+#         # For RERF
+#         patch_height_min = [2]
+#         patch_width_min = [20]
+#         patch_height_max = [10]
+#         patch_width_max = [50]
 
-        # number of iterations to RandomSearchCV
-        n_iter = 1
+#         # number of iterations to RandomSearchCV
+#         n_iter = 1
 
-    if isinstance(clf, rerfClassifier):
-        param_grid = {
-            f"n_estimators": n_estimators,
-            f"max_features": max_features,
-            f"max_depth": max_depth,
-            f"min_samples_split": min_samples_split,
-            f"patch_height_min": patch_height_min,
-            f"patch_width_min": patch_width_min,
-            f"patch_height_max": patch_height_max,
-            f"patch_width_max": patch_width_max,
-        }
+#     if isinstance(clf, rerfClassifier):
+#         param_grid = {
+#             f"n_estimators": n_estimators,
+#             f"max_features": max_features,
+#             f"max_depth": max_depth,
+#             f"min_samples_split": min_samples_split,
+#             f"patch_height_min": patch_height_min,
+#             f"patch_width_min": patch_width_min,
+#             f"patch_height_max": patch_height_max,
+#             f"patch_width_max": patch_width_max,
+#         }
 
-    else:
-        # Get name of the classifier
-        clf_name = clf.__class__.__name__
+#     else:
+#         # Get name of the classifier
+#         clf_name = clf.__class__.__name__
 
-        param_grid = {
-            f"{clf_name}__n_estimators": n_estimators,
-            f"{clf_name}__max_features": max_features,
-            f"{clf_name}__max_depth": max_depth,
-            f"{clf_name}__min_samples_split": min_samples_split,
-            f"{clf_name}__patch_height_min": patch_height_min,
-            f"{clf_name}__patch_width_min": patch_width_min,
-            f"{clf_name}__patch_height_max": patch_height_max,
-            f"{clf_name}__patch_width_max": patch_width_max,
-        }
+#         param_grid = {
+#             f"{clf_name}__n_estimators": n_estimators,
+#             f"{clf_name}__max_features": max_features,
+#             f"{clf_name}__max_depth": max_depth,
+#             f"{clf_name}__min_samples_split": min_samples_split,
+#             f"{clf_name}__patch_height_min": patch_height_min,
+#             f"{clf_name}__patch_width_min": patch_width_min,
+#             f"{clf_name}__patch_height_max": patch_height_max,
+#             f"{clf_name}__patch_width_max": patch_width_max,
+#         }
 
-    return param_grid
+#     return param_grid
 
 
 def plot_scores(non_nested_scores, nested_scores, num_trials, score_difference):
@@ -284,6 +284,8 @@ def cv_roc(clf, X, y, cv):
 
     scores = {}
 
+    scores["train_predict_proba"] = []
+    scores["train_preds"] = []
     scores["train_inds"] = []
     scores["train_fpr"] = []
     scores["train_tpr"] = []
@@ -292,6 +294,8 @@ def cv_roc(clf, X, y, cv):
     scores["train_thresholds"] = []
     scores["train_confusion_matrix"] = []
 
+    scores["test_predict_proba"] = []
+    scores["test_preds"] = []
     scores["test_inds"] = []
     scores["test_fpr"] = []
     scores["test_tpr"] = []
@@ -307,14 +311,16 @@ def cv_roc(clf, X, y, cv):
     for i, (train, test) in enumerate(cv.split(X=X, y=y)):
         clf.fit(X[train], y[train])
 
-        y_train_prob = clf.predict_proba(X[train])[:, 1]
+        y_train_prob = clf.predict_proba(X[train])
         y_train_pred = clf.predict(X[train])
         y_train = y[train]
         cm_train = confusion_matrix(y_train, y_train_pred)
 
-        fpr, tpr, thresholds = roc_curve(y_train, y_train_prob, pos_label=1)
-        fnr, tnr, _ = roc_curve(y_train, y_train_prob, pos_label=0)
+        fpr, tpr, thresholds = roc_curve(y_train, y_train_prob[:, 1], pos_label=1)
+        fnr, tnr, _ = roc_curve(y_train, y_train_prob[:, 1], pos_label=0)
 
+        scores["train_predict_proba"].append(y_train_prob.tolist())
+        scores["train_preds"].append(list(y_train_pred))
         scores["train_inds"].append(train.tolist())
         scores["train_fpr"].append(fpr.tolist())
         scores["train_tpr"].append(tpr.tolist())
@@ -324,14 +330,14 @@ def cv_roc(clf, X, y, cv):
         scores["train_confusion_matrix"].append(cm_train.tolist())
 
         # For binary classification get probability for class 1
-        y_pred_prob = clf.predict_proba(X[test])[:, 1]
+        y_pred_prob = clf.predict_proba(X[test])
         y_pred = clf.predict(X[test])
         y_test_pred = clf.predict(X[test])
         y_test = y[test]
 
         # Compute the curve and AUC
-        fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob, pos_label=1)
-        fnr, tnr, _ = roc_curve(y_test, y_pred_prob, pos_label=0)
+        fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob[:, 1], pos_label=1)
+        fnr, tnr, _ = roc_curve(y_test, y_pred_prob[:, 1], pos_label=0)
         cm_test = confusion_matrix(y_test, y_test_pred)
 
         # roc_auc = roc_auc_score(y_test, y_pred)
@@ -340,6 +346,8 @@ def cv_roc(clf, X, y, cv):
         # tprs.append(interp_tpr)
         # aucs.append(roc_auc)
 
+        scores["test_predict_proba"].append(y_pred_prob.tolist())
+        scores["test_preds"].append(list(y_pred))
         scores["test_inds"].append(test.tolist())
         scores["test_fpr"].append(fpr.tolist())
         scores["test_tpr"].append(tpr.tolist())
