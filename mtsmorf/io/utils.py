@@ -11,8 +11,8 @@ import mne
 from mne.utils import run_subprocess
 from mne_bids.tsv_handler import _from_tsv
 from mne_bids.tsv_handler import _to_tsv
-from mne_bids.utils import _find_matching_sidecar
-from mne_bids.utils import _parse_ext
+from mne_bids.path import _find_matching_sidecar
+from mne_bids.path import _parse_ext
 
 logger = logging.getLogger(__name__)
 

@@ -1,23 +1,28 @@
 import json
+import sys
 from pprint import pprint
+from pathlib import Path
 
 import joblib
 import mne
 import numpy as np
 import pandas as pd
+from mne_bids import BIDSPath
 from mne_bids import read_raw_bids
 from mne_bids.tsv_handler import _from_tsv
-from mne_bids.utils import _find_matching_sidecar
+from mne_bids.path import _find_matching_sidecar
 from sklearn.preprocessing import LabelBinarizer
-# from utils import NumpyEncoder
+
+sys.path.append(str(Path(__file__).parent.parent / "io"))
+from utils import NumpyEncoder
 
 
-def get_trial_info(bids_basename, bids_root):
+def get_trial_info(bids_path):
     """Get behavior and events trial info from tsv files."""
-    behav_fpath = _find_matching_sidecar(bids_basename, bids_root, suffix="behav.tsv")
+    behav_fpath = _find_matching_sidecar(bids_path, suffix="behav", extension=".tsv")
     behav_tsv = _from_tsv(behav_fpath)
 
-    events_fpath = _find_matching_sidecar(bids_basename, bids_root, suffix="events.tsv")
+    events_fpath = _find_matching_sidecar(bids_path, suffix="events", extension=".tsv")
     events_tsv = _from_tsv(events_fpath)
 
     success_trial_flag = np.array(list(map(int, behav_tsv["successful_trial_flag"])))
@@ -27,18 +32,18 @@ def get_trial_info(bids_basename, bids_root):
     num_trials = len(behav_tsv["trial_id"])
     print(
         f"Out of {num_trials} trials, there were {len(success_inds)} successful trials "
-        f"in {bids_basename}."
+        f"in {bids_path}."
     )
 
     return behav_tsv, events_tsv
 
 
-def _read_ch_anat(bids_basename, bids_root):
+def _read_ch_anat(bids_path):
     # electrodes_fpath = _find_matching_sidecar(
     #     bids_basename, bids_root, suffix="electrodes.tsv"
     # )
     electrodes_fpath = _find_matching_sidecar(
-        bids_basename, bids_root, suffix="channels.tsv"
+        bids_path, suffix="channels", extension=".tsv"
     )
     electrodes_tsv = _from_tsv(electrodes_fpath)
 
@@ -97,9 +102,9 @@ def _get_trial_length_by_kwarg(
     return max_trial_len
 
 
-def _get_bad_chs(bids_basename, bids_root):
+def _get_bad_chs(bids_path):
     # get the channel anat dict
-    ch_anat_dict = _read_ch_anat(bids_basename, bids_root)
+    ch_anat_dict = _read_ch_anat(bids_path)
 
     # get bad channels from anatomy
     bads = []
@@ -112,11 +117,11 @@ def _get_bad_chs(bids_basename, bids_root):
     return bads
 
 
-def read_trial(bids_basename, bids_root, trial_id, notch_filter=False, picks=None):
+def read_trial(bids_path, trial_id, picks=None):
     """Read Raw from specific trial id."""
-    raw = read_raw_bids(bids_basename, bids_root)
+    raw = read_raw_bids(bids_path)
 
-    bads = _get_bad_chs(bids_basename, bids_root)
+    bads = _get_bad_chs(bids_path)
     raw.info["bads"].extend(bads)
 
     if picks is None:
@@ -125,7 +130,7 @@ def read_trial(bids_basename, bids_root, trial_id, notch_filter=False, picks=Non
         good_chs = [ch for ch in raw.ch_names if ch in picks and ch not in raw.info["bads"]]
 
     # get trial information
-    behav_tsv, events_tsv = get_trial_info(bids_basename, bids_root)
+    behav_tsv, events_tsv = get_trial_info(bids_path)
 
     # trial_info from behav tsv
     behav_trial_ind = behav_tsv["trial_id"].index(str(trial_id))
@@ -166,17 +171,13 @@ def read_trial(bids_basename, bids_root, trial_id, notch_filter=False, picks=Non
         picks=good_chs, start=start, stop=stop, return_times=True
     )
 
-    if notch_filter:
-        fs = raw.info["sfreq"]
-        rawdata = mne.filter.notch_filter(rawdata, fs, np.arange(60, fs / 2, 60))
-
     return rawdata, times, events_tsv
 
 
-def read_label(bids_basename, bids_root, trial_id=None, label_keyword="bet_amount"):
+def read_label(bids_path, trial_id=None, label_keyword="bet_amount"):
     """Read trial's label"""
     # get trial information
-    behav_tsv, events_tsv = get_trial_info(bids_basename, bids_root)
+    behav_tsv, events_tsv = get_trial_info(bids_path)
     trial_ids = behav_tsv["trial_id"]
 
     # return all trials
@@ -204,16 +205,17 @@ def read_label(bids_basename, bids_root, trial_id=None, label_keyword="bet_amoun
     return y, trial_ids
 
 
-def read_dataset(bids_basename, bids_root, kind='ieeg', tmin=-0.2, tmax=0.5, picks=None, resample_rate=None, event_key="show card", n_jobs=1, verbose=True):
+def read_dataset(bids_path, kind='ieeg', tmin=-0.2, tmax=0.5, picks=None, event_key="show card", n_jobs=1, notch_filter=False, verbose=True):
     """Read entire dataset as an Epoch."""
+
     # read in the dataset from mnebids
-    raw = read_raw_bids(bids_basename, bids_root)
+    raw = read_raw_bids(bids_path)
 
     # get trial information
-    behav_tsv, events_tsv = get_trial_info(bids_basename, bids_root)
+    behav_tsv, events_tsv = get_trial_info(bids_path)
 
     # get bad channels
-    bads = _get_bad_chs(bids_basename, bids_root)
+    bads = _get_bad_chs(bids_path)
     raw.info["bads"].extend(bads)
     if (picks is None) or (len(picks) == 0):
         good_chs = [ch for ch in raw.ch_names if ch not in raw.info["bads"]]
@@ -224,10 +226,11 @@ def read_dataset(bids_basename, bids_root, kind='ieeg', tmin=-0.2, tmax=0.5, pic
     # if mne.__version__ != '0.21.dev0':
     #     raw.load_data()
     raw = raw.pick_types(meg=False, seeg=True)
-
-    # Allow for resampling
-    if resample_rate is not None:
-        raw = raw.resample(resample_rate, n_jobs=n_jobs)
+    
+    if notch_filter is True:
+        raw.load_data(verbose="DEBUG")
+        fs = raw.info['sfreq']
+        raw = raw.notch_filter(np.arange(60, fs/2, 60))
 
     # get the events and events id structure
     events, event_id = mne.events_from_annotations(raw, verbose=verbose)
@@ -248,7 +251,7 @@ def read_dataset(bids_basename, bids_root, kind='ieeg', tmin=-0.2, tmax=0.5, pic
     epochs = mne.Epochs(raw, events, event_id, baseline=None,
                         tmin=tmin, tmax=tmax, picks=good_chs,
                         verbose=verbose)
-
+        
     return epochs
 
 
@@ -508,21 +511,22 @@ if __name__ == "__main__":
     trial_id = 2
 
     # bids filename
-    bids_basename = make_bids_basename(
+    bids_path = BIDSPath(
         subject=subject,
         session=session,
         task=task,
         acquisition=acquisition,
         run=run,
-        suffix=f"{kind}.vhdr",
+        suffix=kind,
+        extension=".vhdr",
     )
 
     # read a specific trial
-    rawdata, times, events_tsv = read_trial(bids_basename, bids_root, trial_id)
+    rawdata, times, events_tsv = read_trial(bids_path, trial_id)
 
     # get the label of this trial
     y, trial_ids = read_label(
-        bids_basename, bids_root, trial_id=None, label_keyword="bet_amount"
+        bids_path, trial_id=None, label_keyword="bet_amount"
     )
     unsuccessful_trial_inds = np.where(np.isnan(y))[
         0
@@ -530,7 +534,7 @@ if __name__ == "__main__":
     y = np.delete(y, unsuccessful_trial_inds)
 
     # read dataset as an epoch
-    epochs = read_dataset(bids_basename, bids_root)  # N x C x T' flatten to # N x (C x T')
+    epochs = read_dataset(bids_path)  # N x C x T' flatten to # N x (C x T')
     epochs = epochs.drop(unsuccessful_trial_inds)
     epochs.load_data()
     epochs_data = epochs.get_data()
@@ -544,7 +548,7 @@ if __name__ == "__main__":
 
     print("Specific trial: ", rawdata.shape)
     print("Events data structure for specific trial: ", events_tsv)
-    print(bids_basename)
+    print(bids_path)
     print(times[0:5])
 
     run_exp(epochs_data, y)
