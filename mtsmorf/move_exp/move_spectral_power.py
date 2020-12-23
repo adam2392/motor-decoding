@@ -132,6 +132,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tmin, tmax = (-0.75, 1.25)
+
+
+    #### TODO: change file paths
     bids_root = Path("/workspaces/research/mnt/data/efri/")
     derivatives_path = (
         bids_root
