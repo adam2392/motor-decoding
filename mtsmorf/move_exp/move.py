@@ -66,8 +66,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    tmin, tmax = (-0.5, 1.0)
+
     bids_root = Path("/workspaces/research/mnt/data/efri/")
-    derivatives_path = bids_root / "derivatives" / "preprocessed" / "low-pass=1000Hz-downsample=500"
+    derivatives_path = bids_root / "derivatives" / "preprocessed" / f"tmin={tmin}-tmax={tmax}" / "low-pass=1000Hz-downsample=500"
     results_path = Path("/workspaces/research/seeg localization/SPORF/mtsmorf/results")
 
     # new directory paths for outputs and inputs at Hackerman workstation
