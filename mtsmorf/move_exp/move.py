@@ -27,8 +27,7 @@ from plotting import (
     plot_feature_importances,
     plot_cv_indices,
 )
-from utils import NumpyEncoder
-from cv import cv_fit
+from utils import NumpyEncoder, cv_fit
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
@@ -346,7 +345,7 @@ if __name__ == "__main__":
                 importances_std=clf_scores[clf_name][f"validate_{scoring_method}_imp_std"],
             )
             fig, ax = plt.subplots(dpi=200, figsize=(12, 8))
-            plot_feature_importances(result, epochs.ch_names, epochs.times, ax=ax)
+            plot_feature_importances(result, epochs.ch_names, epochs.times, nchs, nsteps, ax=ax)
             ax.set(title=f"{subject.upper()}: Feature Importances {scoring_method}")
             fig.tight_layout()
 

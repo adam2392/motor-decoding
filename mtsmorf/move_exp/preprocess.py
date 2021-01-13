@@ -36,8 +36,9 @@ def str2bool(v):
 if __name__ == "__main__":
     # bids_root = Path("/workspaces/research/mnt/data/efri/")
     bids_root = Path("/Volumes/Mac/research/data/efri/")
+    
     derivatives_path = (
-        bids_root / "derivatives" / "preprocessed" / "tmin=-0.75-tmax=1.25" / "low-pass=1000Hz-downsample=500"
+        bids_root / "derivatives" / "preprocessed" / "tmin=-0.75-tmax=1.25" / "band-pass=1-1000Hz-downsample=500"
     )
     # derivatives_path = (
     #     bids_root / "derivatives" / "preprocessed" / "band-pass=70-200Hz-downsample=500"
@@ -104,7 +105,7 @@ if __name__ == "__main__":
 
         # Low-pass filter up to sfreq/2
         fs = epochs.info["sfreq"]
-        epochs = epochs.filter(l_freq=None, h_freq=fs / 2 - 1)
+        epochs = epochs.filter(l_freq=1, h_freq=fs / 2 - 1)
         # epochs = epochs.filter(l_freq=70, h_freq=200)
 
         # Downsample epochs to 500 Hz

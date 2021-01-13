@@ -205,7 +205,7 @@ def read_label(bids_path, trial_id=None, label_keyword="bet_amount"):
     return y, trial_ids
 
 
-def read_dataset(bids_path, kind='ieeg', tmin=-0.2, tmax=0.5, picks=None, event_key="show card", n_jobs=1, notch_filter=False, verbose=True):
+def read_dataset(bids_path, kind='ieeg', tmin=-0.25, tmax=0.5, picks=None, event_key="show card", n_jobs=1, notch_filter=False, verbose=True):
     """Read entire dataset as an Epoch."""
 
     # read in the dataset from mnebids

@@ -206,15 +206,15 @@ def plot_roc_multiclass_cv(y_pred_probas, X, y, test_inds, ax=None):
     return ax
 
 
-def plot_feature_importances(result, ch_names, times, ax=None):
+def plot_feature_importances(result, ch_names, times, image_height, image_width, ax=None):
     nchs = len(ch_names)
     nsteps = len(times)
 
     if ax is None:
         ax = plt.gca()
 
-    feat_importance_means = np.array(result["importances_mean"]).reshape(nchs, nsteps)
-    feat_importance_stds = np.array(result["importances_std"]).reshape(nchs, nsteps)
+    feat_importance_means = np.array(result["importances_mean"]).reshape(image_height, image_width)
+    feat_importance_stds = np.array(result["importances_std"]).reshape(image_height, image_width)
 
     df_feat_importances = pd.DataFrame(feat_importance_means)
 
@@ -222,7 +222,7 @@ def plot_feature_importances(result, ch_names, times, ax=None):
         df_feat_importances,
         vmin=np.min(feat_importance_means),
         vmax=np.max(feat_importance_means),
-        center=0.,
+        center=0.0,
         cmap=plt.cm.coolwarm,
         yticklabels=ch_names,
         ax=ax,
@@ -237,6 +237,101 @@ def plot_feature_importances(result, ch_names, times, ax=None):
         [f"{times[0]:.1f}", f"{times[time_loc]:.1f}", f"{times[-1]:.1f}"], rotation=0
     )
     ax.set(xlabel="Time (s)")
+
+    return ax
+
+
+def plot_roc_cv(y_pred_probas, X, y, test_inds, ax=None):
+
+    if ax is None:
+        ax = plt.gca()
+
+    fprs = []
+    tprs = []
+    aucs = []
+
+    mean_fpr = np.linspace(0, 1, 100)
+
+    # Compute ROC metrics for each fold
+    for i, (y_pred_proba, test) in enumerate(zip(y_pred_probas, test_inds)):
+        X_test, y_test = X[test], y[test]
+        n_classes = len(np.unique(y_test))
+
+        # y_score = estimator.predict_proba(X_test)
+        y_pred_proba = np.array(y_pred_proba)
+
+        # Compute ROC metrics
+        fpr, tpr, _ = roc_curve(y_test, y_pred_proba[:, 1])
+        roc_auc = auc(fpr, tpr)
+
+        interp_tpr = np.interp(mean_fpr, fpr, tpr)
+        interp_tpr[0] = 0.0
+
+        fprs.append(mean_fpr)
+        tprs.append(interp_tpr)
+        aucs.append(roc_auc)
+
+        # fprs.append(fpr)
+        # tprs.append(tpr)
+        # aucs.append(roc_auc)
+
+    # n_folds x n_classes x 100
+    fprs = np.array(fprs)
+    tprs = np.array(tprs)
+    aucs = np.array(aucs)
+
+    mean_fpr = np.mean(fprs, axis=0)
+    mean_tpr = np.mean(tprs, axis=0)
+    mean_tpr[-1] = 1.0
+
+    # For each class, compute ROC metrics averaged over the folds
+    # for i, color in zip(range(n_classes), colors):
+    #     mean_fpr = mean_fprs[i]
+    #     mean_tpr = mean_tprs[i]
+    #     mean_auc = auc(mean_fpr, mean_tpr)
+    #     std_auc = np.std(aucs, axis=0)[i]
+    #     ax.plot(
+    #         mean_fpr,
+    #         mean_tpr,
+    #         color=color,
+    #         label=r"{label_name}: Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+    #             label_name=label_names[i], mean_auc=mean_auc, std_auc=std_auc
+    #         ),
+    #     )
+
+    #     std_tpr = np.std(tprs, axis=0)[i]
+    #     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    #     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    #     ax.fill_between(
+    #         mean_fpr,
+    #         tprs_lower,
+    #         tprs_upper,
+    #         color=color,
+    #         alpha=0.2,
+    #     )
+
+    mean_auc = auc(mean_fpr, mean_tpr)
+    std_auc = np.std(aucs, axis=0)
+    ax.plot(
+        mean_fpr,
+        mean_tpr,
+        label=r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+            mean_auc=mean_auc, std_auc=std_auc
+        ),
+        ls="-",
+    )
+
+    std_tpr = np.std(tprs, axis=0)
+    tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    ax.fill_between(
+        mean_fpr,
+        tprs_lower,
+        tprs_upper,
+        alpha=0.1,
+    )
+
+    ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.8)
 
     return ax
 
@@ -299,4 +394,30 @@ def plot_cv_indices(cv, X, y, ax, n_splits, lw=10):
         xlim=[0, len(X)],
     )
     ax.set_title(f"{type(cv).__name__}", fontsize=15)
+    return ax
+
+
+def plot_accuracies(clf_scores, ax=None):
+    if ax is None:
+        ax = plt.gca()
+
+    accs = np.array([np.mean(scores["test_accuracy"]) for scores in clf_scores.values()])
+    acc_std = np.array([np.std(scores["test_accuracy"]) for scores in clf_scores.values()])
+
+    ax.errorbar(list(clf_scores.keys()), accs, yerr=acc_std, fmt='o', markersize=8, capsize=15)
+    ax.axhline(np.mean(clf_scores["MT-MORF"]["test_accuracy"]), lw=1, color='k', ls='--')
+    
+    return ax
+
+
+def plot_roc_aucs(clf_scores, ax=None):
+    if ax is None:
+        ax = plt.gca()
+
+    roc_aucs = np.array([np.mean(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()])
+    roc_aucs_std = np.array([np.std(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()])
+
+    ax.errorbar(list(clf_scores.keys()), roc_aucs, yerr=roc_aucs_std, fmt='o', markersize=8, capsize=15)
+    ax.axhline(np.mean(clf_scores["MT-MORF"]["test_roc_auc_ovr"]), lw=1, color='k', ls='--')
+    
     return ax

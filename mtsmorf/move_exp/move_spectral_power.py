@@ -13,7 +13,10 @@ from matplotlib import pyplot as plt
 from mne.time_frequency import tfr_morlet
 from mne_bids import BIDSPath
 from rerf.rerfClassifier import rerfClassifier
+from sklearn.dummy import DummyClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 
@@ -29,25 +32,11 @@ from plotting import (
     plot_cv_indices,
 )
 from utils import NumpyEncoder
-from cv import cv_fit
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.dummy import DummyClassifier
+from experiments import cv_fit
 
 plt.style.use(["science", "ieee", "no-latex"])
 
 RNG = 1
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 def prepare_epochs(bids_path):
@@ -76,6 +65,17 @@ def prepare_epochs(bids_path):
     return epochs, labels
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
 def prepare_freq_data(
     epochs, nfreqs=10, l_freq=70, h_freq=200, decim=3, n_jobs=1, return_freqs=False
 ):
@@ -102,9 +102,9 @@ def prepare_freq_data(
     freq_data = freq_data[:, :, times]
 
     if return_freqs:
-        return freq_data, freqs
+        return freq_data, power.times, freqs
 
-    return freq_data
+    return freq_data, power.times
 
 
 if __name__ == "__main__":
@@ -133,7 +133,6 @@ if __name__ == "__main__":
 
     tmin, tmax = (-0.75, 1.25)
 
-
     #### TODO: change file paths
     bids_root = Path("/workspaces/research/mnt/data/efri/")
     derivatives_path = (
@@ -143,11 +142,14 @@ if __name__ == "__main__":
         / f"tmin={tmin}-tmax={tmax}"
         / "low-pass=1000Hz-downsample=500"
     )
-    results_path = Path("/workspaces/research/seeg localization/SPORF/mtsmorf/results")
+    # results_path = Path("/workspaces/research/seeg localization/SPORF/mtsmorf/results")
+    results_path = Path(
+        "/workspaces/research/efri OneDrive/Adam Li - efri/derivatives/workstation_output"
+    )
 
     # new directory paths for outputs and inputs at Hackerman workstation
     # bids_root = Path("/home/adam2392/hdd/Dropbox/efri/")
-    # results_path = bids_root / "derivatives" / "raw" / "mtsmorf" / "results"s
+    # results_path = bids_root / "derivatives" / "raw" / "mtsmorf" / "results"
 
     subject = args.subject
 
@@ -205,7 +207,7 @@ if __name__ == "__main__":
         plt.close(fig)
 
     nfreqs = 10
-    freq_data, freqs = prepare_freq_data(
+    freq_data, power_times, freqs = prepare_freq_data(
         epochs,
         nfreqs=nfreqs,
         l_freq=70,
@@ -363,7 +365,7 @@ if __name__ == "__main__":
 
             except Exception as e:
                 traceback.print_exc()
-            
+
             scores["estimator"] = estimators
             clf_scores[clf_name] = scores
 
@@ -378,7 +380,7 @@ if __name__ == "__main__":
                 clf_name = clf.strategy
             else:
                 clf_name = clf.__class__.__name__
-                
+
             with open(
                 results_path / f"{subject}/{subject}_{clf_name}_results.json"
             ) as fout:
@@ -395,10 +397,113 @@ if __name__ == "__main__":
             ],
             importances_std=clf_scores[clf_name][f"validate_{scoring_method}_imp_std"],
         )
-        fig, ax = plt.subplots(dpi=200, figsize=(12, 8))
 
         ch_names = [f"{ch}-{freq:.1f}" for ch in epochs.ch_names for freq in freqs]
-        plot_feature_importances(result, ch_names, epochs.times, ax=ax)
+        inds = np.where((power_times >= -0.5) & (power_times <= 1.0))[0]
+        times = power_times[inds]
+
+        image_height = nchs * nfreqs
+        image_width = len(times)
+
+        ## Plots to help summarize heatmap
+        feat_importance_means = np.array(result["importances_mean"]).reshape(
+            image_height, image_width
+        )
+        feat_importance_stds = np.array(result["importances_std"]).reshape(
+            image_height, image_width
+        )
+
+        id_col = pd.Series(range(1, nchs * nfreqs + 1))
+        ch_names_rep = np.repeat(epochs.ch_names, nfreqs)
+        freqs_tiled = np.tile(freqs, nchs)
+        thr = 0.003
+
+        df_feat_importances = pd.DataFrame(
+            {
+                "ID": id_col,
+                "channel": ch_names_rep,
+                "frequency": freqs_tiled,
+                "count": np.sum(np.absolute(feat_importance_means) >= thr, axis=1),
+            }
+        )
+
+        fig, ax = plt.subplots(dpi=300, figsize=(8, 16))
+
+        df_feat_importances['count_by_channel'] = df_feat_importances.groupby(['channel'])['count'].transform('sum')
+        srtd_df = df_feat_importances.sort_values(by=["count_by_channel"], ascending=False)
+
+        sns.barplot(x="count_by_channel", y="channel", data=srtd_df, ci=None, ax=ax)
+        ax.set(title=f"{subject.upper()}: Count of Time Steps with Mean Importance >= {thr} by Channel", ylabel="channel")
+        
+        plt.savefig(
+            results_path
+            / f"{subject}/{clf_name}_feature_importances_freqs_{scoring_method}_summary_channels_thr={thr}.png"
+        )
+        print(f"Feature importance matrix {scoring_method} summary (channels) for {clf_name} saved.")
+        plt.close(fig)
+
+        fig, ax = plt.subplots(dpi=300, figsize=(8, 16))
+        df_feat_importances['count_by_freq'] = df_feat_importances.groupby(['frequency'])['count'].transform('sum')
+        srtd_df = df_feat_importances.sort_values(by=["count_by_freq"], ascending=False)
+
+        sns.barplot(x="count_by_freq", y="frequency", orient="h", data=srtd_df, ci=None, ax=ax)
+        ax.set(title=f"{subject.upper()}: Count of Time Steps with Mean Importance >= {thr} by Frequency", ylabel="frequency")
+        plt.savefig(
+            results_path
+            / f"{subject}/{clf_name}_feature_importances_freqs_{scoring_method}_summary_freqs_thr={thr}.png"
+        )
+        print(f"Feature importance matrix {scoring_method} summary (frequencies) for {clf_name} saved.")
+        plt.close(fig)
+
+
+
+        id_col = pd.Series(range(1, nchs * nfreqs + 1))
+        ch_names_rep = np.repeat(epochs.ch_names, nfreqs)
+        freqs_tiled = np.tile(freqs, nchs)
+
+        df_feat_importances = pd.DataFrame(
+            {
+                "ID": id_col,
+                "channel": ch_names_rep,
+                "frequency": freqs_tiled,
+                "count": np.sum(np.absolute(feat_importance_means) > 0, axis=1),
+            }
+        )
+
+        fig, ax = plt.subplots(dpi=300, figsize=(8, 16))
+
+        df_feat_importances['count_by_channel'] = df_feat_importances.groupby(['channel'])['count'].transform('sum')
+        srtd_df = df_feat_importances.sort_values(by=["count_by_channel"], ascending=False)
+
+        sns.barplot(x="count_by_channel", y="channel", data=srtd_df, ci=None, ax=ax)
+        ax.set(title=f"{subject.upper()}: Count of Time Steps with Nonzero Mean Importance by Channel", ylabel="channel")
+        
+        plt.savefig(
+            results_path
+            / f"{subject}/{clf_name}_feature_importances_freqs_{scoring_method}_summary_channels_nonzero.png"
+        )
+        print(f"Feature importance matrix {scoring_method} summary (channels) for {clf_name} saved.")
+        plt.close(fig)
+
+        fig, ax = plt.subplots(dpi=300, figsize=(8, 16))
+        df_feat_importances['count_by_freq'] = df_feat_importances.groupby(['frequency'])['count'].transform('sum')
+        srtd_df = df_feat_importances.sort_values(by=["count_by_freq"], ascending=False)
+
+        sns.barplot(x="count_by_freq", y="frequency", orient="h", data=srtd_df, ci=None, ax=ax)
+        ax.set(title=f"{subject.upper()}: Count of Time Steps with Nonzero Mean Importance by Frequency", ylabel="frequency")
+        plt.savefig(
+            results_path
+            / f"{subject}/{clf_name}_feature_importances_freqs_{scoring_method}_summary_freqs_nonzero.png"
+        )
+        print(f"Feature importance matrix {scoring_method} summary (frequencies) for {clf_name} saved.")
+        plt.close(fig)
+
+        fig, ax = plt.subplots(dpi=300, figsize=(20, 80))
+
+        ## Plot full feat importance heatmap
+        plot_feature_importances(
+            result, ch_names, times, nchs * nfreqs, len(times), ax=ax
+        )
         ax.set(title=f"{subject.upper()}: Feature Importances {scoring_method}")
         fig.tight_layout()
 
@@ -512,5 +617,5 @@ if __name__ == "__main__":
 
             except Exception as e:
                 traceback.print_exc()
-            
+
             plt.close(fig)

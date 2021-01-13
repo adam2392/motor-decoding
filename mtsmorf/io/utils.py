@@ -3,16 +3,27 @@ import logging
 import os
 import platform
 import re
+import sys
 from pathlib import Path
 from typing import Union, List
 import numpy as np
 
 import mne
 from mne.utils import run_subprocess
+from mne.time_frequency import tfr_morlet
 from mne_bids.tsv_handler import _from_tsv
 from mne_bids.tsv_handler import _to_tsv
 from mne_bids.path import _find_matching_sidecar
 from mne_bids.path import _parse_ext
+
+from rerf.rerfClassifier import rerfClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.dummy import DummyClassifier
+from tqdm import tqdm
+from sklearn.metrics import confusion_matrix, roc_curve
+from sklearn.model_selection import cross_validate
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +33,6 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
-
-
-def plot_roc_curve():
-    pass
 
 
 def _generate_linspace_roc_from_dict(fpr_arr: List, tpr_arr: List, n_points: int=100):
@@ -192,3 +199,4 @@ def append_original_fname_to_scans(
 
     # write the scans out
     _to_tsv(scans_tsv, scans_fpath)
+    
