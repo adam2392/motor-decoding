@@ -19,7 +19,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, roc_curve
 from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklearn.utils import check_random_state
-from tqdm import tqdm
 
 from plotting import (
     plot_roc_cv,
@@ -304,7 +303,7 @@ def run_classifier_comparison(
         dummy,
     ]
 
-    for clf in tqdm(clfs):
+    for clf in clfs:
         if clf.__class__.__name__ == "rerfClassifier":
             clf_name = clf.get_params()["projection_matrix"]
         elif clf.__class__.__name__ == "DummyClassifier":
@@ -519,7 +518,7 @@ def filter_epochs(epochs, resample_rate=500):
     return new_epochs
 
 
-def movement_onset_experiment(bids_path, destination_path, random_state=None):
+def movement_onset_experiment(bids_path, destination_path, domain, random_state=None):
     """
     docstring
     """
@@ -528,7 +527,6 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
     if not os.path.exists(destination):
         os.makedirs(destination)
 
-    ## Time Domain
     before = read_dataset(
         bids_path,
         kind="ieeg",
@@ -553,17 +551,63 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
     after.load_data()
     after_data = filter_epochs(after).get_data()
 
-    ntrials, nchs, nsteps = before_data.shape
+    if domain.lower() == "time":
+        ## Time Domain
+        ntrials, nchs, nsteps = before_data.shape
 
-    X = np.vstack(
-        [
-            before_data.reshape(before_data.shape[0], -1),  # class 0
-            after_data.reshape(after_data.shape[0], -1),  # class 1
-        ]
-    )
-    y = np.concatenate([np.zeros(len(before_data)), np.ones(len(after_data))])
+        X = np.vstack(
+            [
+                before_data.reshape(before_data.shape[0], -1),  # class 0
+                after_data.reshape(after_data.shape[0], -1),  # class 1
+            ]
+        )
+        y = np.concatenate([np.zeros(len(before_data)), np.ones(len(after_data))])
+        image_height = nchs
+        image_width = nsteps
 
-    assert X.shape[0] == y.shape[0], "X and y do not have the same number of samples"
+    elif domain.lower() == "frequency":
+        ## Freq Domain
+        nfreqs = 10
+        lfreq, hfreq = (70, 200)
+        freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
+        n_cycles = freqs / 2.0  # different number of cycle per frequency
+
+        after_power = tfr_morlet(
+            after,
+            freqs=freqs,
+            n_cycles=n_cycles,
+            average=False,
+            return_itc=False,
+            decim=3,
+            n_jobs=1,
+        ).data
+        before_power = tfr_morlet(
+            before,
+            freqs=freqs,
+            n_cycles=n_cycles,
+            average=False,
+            return_itc=False,
+            decim=3,
+            n_jobs=1,
+        ).data
+
+        ntrials, nchs, nfreqs, nsteps = before_power.shape
+
+        X = np.vstack(
+            [
+                before_power.reshape(before_power.shape[0], -1),  # class 0
+                after_power.reshape(after_power.shape[0], -1),  # class 1
+            ]
+        )
+        y = np.concatenate([np.zeros(len(before_power)), np.ones(len(after_power))])
+
+        image_height = nchs * nfreqs
+        image_width = nsteps
+
+    else:
+        raise ValueError("'domain' is not one of 'time' or 'frequency'")
+
+    assert X.shape[0] == y.shape[0], "X and y do not have the same number of epochs"
 
     # Perform K-Fold cross validation
     n_splits = 5
@@ -579,8 +623,8 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
         max_features="auto",
         n_jobs=-1,
         random_state=random_state,
-        image_height=nchs,
-        image_width=nsteps,
+        image_height=image_height,
+        image_width=image_width,
     )
 
     ## Cross validation. Fit model
@@ -612,7 +656,7 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
         ylabel="True Positive Rate",
         xlim=[-0.05, 1.05],
         ylim=[-0.05, 1.05],
-        title=f"{subject.upper()} MT-MORF ROC Curve ('At Center' vs. 'Left Target', Time Domain)",
+        title=f"{subject.upper()} MT-MORF ROC Curve ('At Center' vs. 'Left Target', {domain.capitalize()} Domain)",
     )
     axs[0].legend(loc="lower right")
 
@@ -621,8 +665,8 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
         max_features="auto",
         n_jobs=-1,
         random_state=random_state,
-        image_height=nchs,
-        image_width=nsteps,
+        image_height=image_height,
+        image_width=image_width,
     )
 
     srerf = rerfClassifier(
@@ -630,8 +674,8 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
         max_features="auto",
         n_jobs=-1,
         random_state=random_state,
-        image_height=nchs,
-        image_width=nsteps,
+        image_height=image_height,
+        image_width=image_width,
     )
 
     lr = LogisticRegression(random_state=random_state)
@@ -647,7 +691,7 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
         dummy,
     ]
 
-    for clf in tqdm(clfs):
+    for clf in clfs:
         if clf.__class__.__name__ == "rerfClassifier":
             clf_name = clf.get_params()["projection_matrix"]
         elif clf.__class__.__name__ == "DummyClassifier":
@@ -670,153 +714,10 @@ def movement_onset_experiment(bids_path, destination_path, random_state=None):
     plot_accuracies(clf_scores, ax=axs[1])
     axs[1].set(
         ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers ('At Center' vs. 'Left Target', Time Domain)",
+        title=f"{subject.upper()}: Accuracy of Classifiers ('At Center' vs. 'Left Target', {domain.capitalize()} Domain)",
     )
     fig.tight_layout()
-    plt.savefig(destination / "movement_onset_time_domain.png")
-    plt.close(fig)
-
-    ## Freq Domain
-    nfreqs = 10
-    lfreq, hfreq = (70, 200)
-    freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
-    n_cycles = freqs / 2.0  # different number of cycle per frequency
-
-    after_power = tfr_morlet(
-        after,
-        freqs=freqs,
-        n_cycles=n_cycles,
-        average=False,
-        return_itc=False,
-        decim=3,
-        n_jobs=1,
-    ).data
-    before_power = tfr_morlet(
-        before,
-        freqs=freqs,
-        n_cycles=n_cycles,
-        average=False,
-        return_itc=False,
-        decim=3,
-        n_jobs=1,
-    ).data
-
-    ntrials, nchs, nfreqs, nsteps = before_power.shape
-
-    X = np.vstack(
-        [
-            before_power.reshape(before_power.shape[0], -1),  # class 0
-            after_power.reshape(after_power.shape[0], -1),  # class 1
-        ]
-    )
-    y = np.concatenate([np.zeros(len(before_power)), np.ones(len(after_power))])
-
-    assert X.shape[0] == y.shape[0], "X and y do not have the same number of epochs"
-
-    # Perform K-Fold cross validation
-    n_splits = 5
-    cv = StratifiedKFold(n_splits=n_splits, shuffle=False)
-
-    mtsmorf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=nchs * nfreqs,
-        image_width=nsteps,
-    )
-
-    ## Cross validation. Fit model
-    stratified_kf_scores = cv_fit(
-        mtsmorf,
-        X,
-        y,
-        metrics=metrics,
-        cv=cv,
-        n_jobs=None,
-        return_train_score=True,
-        return_estimator=True,
-    )
-
-    ## Plot results
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-
-    plot_roc_cv(
-        stratified_kf_scores["test_predict_proba"],
-        X,
-        y,
-        stratified_kf_scores["test_inds"],
-        ax=axs[0],
-    )
-
-    axs[0].set(
-        xlabel="False Positive Rate",
-        ylabel="True Positive Rate",
-        xlim=[-0.05, 1.05],
-        ylim=[-0.05, 1.05],
-        title=f"{subject.upper()} MT-MORF ROC Curve ('At Center' vs. 'Left Target', Freq Domain)",
-    )
-    axs[0].legend(loc="lower right")
-
-    mtsmorf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=nchs * nfreqs,
-        image_width=nsteps,
-    )
-
-    srerf = rerfClassifier(
-        projection_matrix="S-RerF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=nchs * nfreqs,
-        image_width=nsteps,
-    )
-
-    lr = LogisticRegression(random_state=random_state)
-    rf = RandomForestClassifier(random_state=random_state)
-    dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
-
-    clf_scores = dict()
-    clfs = [
-        mtsmorf,
-        srerf,
-        rf,
-        lr,
-        dummy,
-    ]
-
-    for clf in tqdm(clfs):
-        if clf.__class__.__name__ == "rerfClassifier":
-            clf_name = clf.get_params()["projection_matrix"]
-        elif clf.__class__.__name__ == "DummyClassifier":
-            clf_name = clf.strategy
-        else:
-            clf_name = clf.__class__.__name__
-
-        clf_scores[clf_name] = cv_fit(
-            clf,
-            X,
-            y,
-            cv=cv,
-            metrics=metrics,
-            n_jobs=None,
-            return_train_score=True,
-            return_estimator=True,
-        )
-
-    ## Plot results
-    plot_accuracies(clf_scores, ax=axs[1])
-    axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers ('At Center' vs. 'Left Target', Freq Domain)",
-    )
-    fig.tight_layout()
-    plt.savefig(destination / "movement_onset_freq_domain.png")
+    plt.savefig(destination / f"movement_onset_{domain}_domain.png")
     plt.close(fig)
 
 
@@ -927,8 +828,8 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     cv = StratifiedKFold(n_splits=n_splits, shuffle=False)
 
     metrics = [
-        'accuracy',
-        'roc_auc_ovr',
+        "accuracy",
+        "roc_auc_ovr",
     ]
 
     mtsmorf = rerfClassifier(
@@ -940,10 +841,21 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
         image_width=nsteps,
     )
 
-    stratified_kf_scores = cv_fit(mtsmorf, X, y, metrics=metrics, cv=cv, n_jobs=None, return_train_score=True, return_estimator=True)
+    stratified_kf_scores = cv_fit(
+        mtsmorf,
+        X,
+        y,
+        metrics=metrics,
+        cv=cv,
+        n_jobs=None,
+        return_train_score=True,
+        return_estimator=True,
+    )
 
     ## Apply baseline
-    baseline = read_dataset(bids_path, kind='ieeg', tmin=0.0, tmax=2.0, picks=None, event_key="At Center")
+    baseline = read_dataset(
+        bids_path, kind="ieeg", tmin=0.0, tmax=2.0, picks=None, event_key="At Center"
+    )
     baseline.load_data()
 
     # Low-pass filter up to sfreq/2
@@ -971,7 +883,6 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     X = baselined_epochs[included_trials].reshape(np.sum(included_trials), -1)
     y = labels[included_trials]
 
-
     ## Fit model
     mtsmorf = rerfClassifier(
         projection_matrix="MT-MORF",
@@ -981,20 +892,33 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
         image_height=baselined_epochs.shape[1],
         image_width=baselined_epochs.shape[2],
     )
-    stratified_kf_scores_baselined = cv_fit(mtsmorf, X, y, metrics=metrics, cv=cv, n_jobs=None, return_train_score=True, return_estimator=True)
+    stratified_kf_scores_baselined = cv_fit(
+        mtsmorf,
+        X,
+        y,
+        metrics=metrics,
+        cv=cv,
+        n_jobs=None,
+        return_train_score=True,
+        return_estimator=True,
+    )
 
     fig, axs = plt.subplots(ncols=2, figsize=(22, 6), dpi=200)
     try:
         plot_paired_cvs_baseline(
             stratified_kf_scores, stratified_kf_scores_baselined, axs=axs
         )
-        axs[0].set(title="Accuracy Comparison in Baseline Correction of Time Domain Signal")
-        axs[1].set(title="ROC AUC Comparison in Baseline Correction of Time Domain Signal")
+        axs[0].set(
+            title="Accuracy Comparison in Baseline Correction of Time Domain Signal"
+        )
+        axs[1].set(
+            title="ROC AUC Comparison in Baseline Correction of Time Domain Signal"
+        )
         plt.savefig(destination / "baseline_experiment_time_domain.png")
     except ValueError as e:
         traceback.print_exc()
     plt.close(fig)
-    
+
     ## Freq Domain
     nfreqs = 10
     freqs = np.logspace(*np.log10([70, 200]), num=nfreqs)
@@ -1099,8 +1023,12 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
         plot_paired_cvs_baseline(
             stratified_kf_scores_freq_avg, stratified_kf_scores_baselined, axs=axs
         )
-        axs[0].set(title="Accuracy Comparison in Baseline Correction of Freq Domain Signal")
-        axs[1].set(title="ROC AUC Comparison in Baseline Correction of Freq Domain Signal")
+        axs[0].set(
+            title="Accuracy Comparison in Baseline Correction of Freq Domain Signal"
+        )
+        axs[1].set(
+            title="ROC AUC Comparison in Baseline Correction of Freq Domain Signal"
+        )
         plt.savefig(destination / "baseline_experiment_freq_domain_averaged.png")
     except ValueError as e:
         traceback.print_exc()
@@ -1111,13 +1039,21 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("subject", type=str, help="subject ID (e.g. efri02)")
-    parser.add_argument("-experiment", type=str, help="which experiment to run")
+    parser.add_argument(
+        "-experiment",
+        type=str,
+        choices=[
+            "shuffle",
+            "movement_onset_time",
+            "movement_onset_frequency",
+            "baseline",
+        ],
+        help="which experiment to run",
+    )
 
     args = parser.parse_args()
     subject = args.subject
     experiment = args.experiment
-
-    assert experiment in ["shuffle", "onset", "baseline"]
 
     tmin, tmax = (-0.75, 1.25)
     bids_root = Path("/workspaces/research/mnt/data/efri/")
@@ -1211,7 +1147,7 @@ if __name__ == "__main__":
         extension=".vhdr",
         root=bids_root,
     )
-    
+
     if experiment == "shuffle":
         shuffle_channels_experiment(
             epochs_anat,
@@ -1223,8 +1159,15 @@ if __name__ == "__main__":
             hfreq=200,
             random_state=rng,
         )
-    elif experiment == "onset":
-        movement_onset_experiment(bids_path, results_path / subject, random_state=rng)
+    elif experiment == "movement_onset_time":
+        movement_onset_experiment(
+            bids_path, results_path / subject, domain="time", random_state=rng
+        )
+
+    elif experiment == "movement_onset_frequency":
+        movement_onset_experiment(
+            bids_path, results_path / subject, domain="frequency", random_state=rng
+        )
 
     elif experiment == "baseline":
         baseline_experiment(

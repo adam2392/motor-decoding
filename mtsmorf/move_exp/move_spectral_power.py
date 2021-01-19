@@ -398,7 +398,6 @@ if __name__ == "__main__":
             importances_std=clf_scores[clf_name][f"validate_{scoring_method}_imp_std"],
         )
 
-        ch_names = [f"{ch}-{freq:.1f}" for ch in epochs.ch_names for freq in freqs]
         inds = np.where((power_times >= -0.5) & (power_times <= 1.0))[0]
         times = power_times[inds]
 
@@ -456,7 +455,6 @@ if __name__ == "__main__":
         plt.close(fig)
 
 
-
         id_col = pd.Series(range(1, nchs * nfreqs + 1))
         ch_names_rep = np.repeat(epochs.ch_names, nfreqs)
         freqs_tiled = np.tile(freqs, nchs)
@@ -485,6 +483,7 @@ if __name__ == "__main__":
         print(f"Feature importance matrix {scoring_method} summary (channels) for {clf_name} saved.")
         plt.close(fig)
 
+
         fig, ax = plt.subplots(dpi=300, figsize=(8, 16))
         df_feat_importances['count_by_freq'] = df_feat_importances.groupby(['frequency'])['count'].transform('sum')
         srtd_df = df_feat_importances.sort_values(by=["count_by_freq"], ascending=False)
@@ -501,6 +500,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(dpi=300, figsize=(20, 80))
 
         ## Plot full feat importance heatmap
+        ch_names = [f"{ch}-{freq:.1f}" for ch in epochs.ch_names for freq in freqs]
         plot_feature_importances(
             result, ch_names, times, nchs * nfreqs, len(times), ax=ax
         )

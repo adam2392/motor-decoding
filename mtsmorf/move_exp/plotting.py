@@ -228,13 +228,13 @@ def plot_feature_importances(result, ch_names, times, image_height, image_width,
         ax=ax,
     )
 
-    time_loc = np.where(times == 0)[0][0]
+    time_lock = np.where(times == 0)[0][0]
 
-    ax.axvline(time_loc, ls="--")
+    ax.axvline(time_lock, ls="--")
 
-    ax.set_xticks([0, time_loc, len(times)])
+    ax.set_xticks([0, time_lock, len(times)])
     ax.set_xticklabels(
-        [f"{times[0]:.1f}", f"{times[time_loc]:.1f}", f"{times[-1]:.1f}"], rotation=0
+        [f"{times[0]:.1f}", f"{times[time_lock]:.1f}", f"{times[-1]:.1f}"], rotation=0
     )
     ax.set(xlabel="Time (s)")
 
