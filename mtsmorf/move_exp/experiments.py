@@ -24,6 +24,7 @@ from plotting import (
     plot_roc_cv,
     plot_accuracies,
     plot_roc_aucs,
+    plot_event_durations
 )
 
 # Hack-y way to import from files in sibling "io" directory
@@ -31,6 +32,38 @@ sys.path.append(str(Path(__file__).parent.parent / "io"))
 sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
 
 from read import read_dataset, read_label, read_trial, get_trial_info, _get_bad_chs
+
+
+def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=None):
+    """
+    docstring
+    """
+
+    mtsmorf = rerfClassifier(
+        projection_matrix="MT-MORF",
+        max_features="auto",
+        n_jobs=-1,
+        random_state=random_state,
+        image_height=image_height,
+        image_width=image_width,
+    )
+
+    srerf = rerfClassifier(
+        projection_matrix="S-RerF",
+        max_features="auto",
+        n_jobs=-1,
+        random_state=random_state,
+        image_height=image_height,
+        image_width=image_width,
+    )
+
+    lr = LogisticRegression(random_state=random_state)
+    rf = RandomForestClassifier(random_state=random_state)
+    dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
+
+    clfs = [mtsmorf, srerf, lr, rf, dummy]
+
+    return clfs
 
 
 def prepare_epochs(bids_path):
@@ -119,12 +152,6 @@ def cv_roc(clf, X, y, cv):
         fnr, tnr, _ = roc_curve(y_test, y_pred_prob[:, 1], pos_label=0)
         cm_test = confusion_matrix(y_test, y_test_pred)
 
-        # roc_auc = roc_auc_score(y_test, y_pred)
-        # interp_tpr = np.interp(mean_fpr, fpr, tpr)
-        # interp_tpr[0] = 0.0
-        # tprs.append(interp_tpr)
-        # aucs.append(roc_auc)
-
         scores["test_predict_proba"].append(y_pred_prob.tolist())
         scores["test_preds"].append(list(y_pred))
         scores["test_inds"].append(test.tolist())
@@ -134,15 +161,6 @@ def cv_roc(clf, X, y, cv):
         scores["test_fnr"].append(fnr.tolist())
         scores["test_tnr"].append(tnr.tolist())
         scores["test_confusion_matrix"].append(cm_test.tolist())
-
-    # mean_tpr = np.mean(tprs, axis=0)
-    # mean_tpr[-1] = 1.0
-    # mean_auc = auc(mean_fpr, mean_tpr)
-    # std_auc = np.std(aucs)
-
-    # std_tpr = np.std(tprs, axis=0)
-    # tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-    # tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
 
     return scores
 
@@ -209,7 +227,7 @@ def run_classifier_comparison(
 
     if freq_domain:
         freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
-        n_cycles = freqs / 2.0  # different number of cycle per frequency
+        n_cycles = freqs / 3.0  # different number of cycle per frequency
         power = tfr_morlet(
             epochs,
             freqs=freqs,
@@ -272,36 +290,10 @@ def run_classifier_comparison(
         "roc_auc_ovr",
     ]
 
-    mtsmorf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
-    )
-
-    srerf = rerfClassifier(
-        projection_matrix="S-RerF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
-    )
-
-    lr = LogisticRegression(random_state=random_state)
-    rf = RandomForestClassifier(random_state=random_state)
-    dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
-
     clf_scores = dict()
-    clfs = [
-        mtsmorf,
-        srerf,
-        rf,
-        lr,
-        dummy,
-    ]
+    clfs = initialize_classifiers(
+        image_height, image_width, n_jobs=-1, random_state=random_state
+    )
 
     for clf in clfs:
         if clf.__class__.__name__ == "rerfClassifier":
@@ -345,7 +337,7 @@ def shuffle_channels_experiment(
         os.makedirs(destination)
 
     ## Time domain
-    clf_scores = run_classifier_comparison(
+    clf_scores_unshuffled = run_classifier_comparison(
         epochs_anat,
         labels,
         cv,
@@ -353,48 +345,47 @@ def shuffle_channels_experiment(
         shuffle_channels=False,
         random_state=random_state,
     )
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+
+    clf_scores_shuffled = run_classifier_comparison(
+        epochs_anat,
+        labels,
+        cv,
+        freq_domain=False,
+        shuffle_channels=True,
+        random_state=random_state,
+    )
+
+    ## Plot results
+    fig, axs = plt.subplots(nrows=2, ncols=2, dpi=100, figsize=(16, 12), sharey="row")
     axs = axs.flatten()
-    plot_accuracies(clf_scores, ax=axs[0])
+
+    plot_accuracies(clf_scores_unshuffled, ax=axs[0])
     axs[0].set(
         ylabel="accuracy",
         title=f"{subject.upper()}: Accuracy of Classifiers (Time Domain Signal, Unshuffled)",
     )
-    plot_roc_aucs(clf_scores, ax=axs[1])
+
+    plot_accuracies(clf_scores_shuffled, ax=axs[1])
     axs[1].set(
-        ylabel="accuracy",
+        title=f"{subject.upper()}: Accuracy of Classifiers (Time Domain Signal, Shuffled)"
+    )
+
+    plot_roc_aucs(clf_scores_unshuffled, ax=axs[2])
+    axs[2].set(
+        ylabel="ROC AUC",
         title=f"{subject.upper()}: ROC AUCs of Classifiers (Time Domain Signal, Unshuffled)",
     )
-    fig.tight_layout()
-    plt.savefig(destination / "time_domain_unshuffled.png")
-    plt.close(fig)
 
-    clf_scores = run_classifier_comparison(
-        epochs_anat,
-        labels,
-        cv,
-        freq_domain=False,
-        shuffle_channels=True,
-        random_state=random_state,
-    )
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-    plot_accuracies(clf_scores, ax=axs[0])
-    axs[0].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers (Time Domain Signal, Shuffled)",
-    )
-    plot_roc_aucs(clf_scores, ax=axs[1])
-    axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: ROC AUCs of Classifiers (Time Domain Signal, Shuffled)",
+    plot_roc_aucs(clf_scores_shuffled, ax=axs[3])
+    axs[3].set(
+        title=f"{subject.upper()}: ROC AUCs of Classifiers (Time Domain Signal, Shuffled)"
     )
     fig.tight_layout()
-    plt.savefig(destination / "time_domain_shuffled.png")
+    plt.savefig(destination / "time_domain_comparison.png")
     plt.close(fig)
 
     ## Freq Domain (Averaging)
-    clf_scores = run_classifier_comparison(
+    clf_scores_unshuffled = run_classifier_comparison(
         epochs_anat,
         labels,
         cv,
@@ -406,23 +397,8 @@ def shuffle_channels_experiment(
         hfreq=hfreq,
         random_state=random_state,
     )
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-    plot_accuracies(clf_scores, ax=axs[0])
-    axs[0].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Unshuffled)",
-    )
-    plot_roc_aucs(clf_scores, ax=axs[1])
-    axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Unshuffled)",
-    )
-    fig.tight_layout()
-    plt.savefig(destination / "freq_domain_averaging_unshuffled.png")
-    plt.close(fig)
 
-    clf_scores = run_classifier_comparison(
+    clf_scores_shuffled = run_classifier_comparison(
         epochs_anat,
         labels,
         cv,
@@ -434,24 +410,39 @@ def shuffle_channels_experiment(
         hfreq=hfreq,
         random_state=random_state,
     )
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+
+    ## Plot results
+    fig, axs = plt.subplots(nrows=2, ncols=2, dpi=100, figsize=(16, 12), sharey="row")
     axs = axs.flatten()
-    plot_accuracies(clf_scores, ax=axs[0])
+
+    plot_accuracies(clf_scores_unshuffled, ax=axs[0])
     axs[0].set(
         ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Shuffled)",
+        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Unshuffled)",
     )
-    plot_roc_aucs(clf_scores, ax=axs[1])
+
+    plot_accuracies(clf_scores_shuffled, ax=axs[1])
     axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Shuffled)",
+        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Shuffled)"
+    )
+
+    plot_roc_aucs(clf_scores_unshuffled, ax=axs[2])
+    axs[2].set(
+        ylabel="ROC AUC",
+        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Unshuffled)",
+    )
+
+    plot_roc_aucs(clf_scores_shuffled, ax=axs[3])
+    axs[3].set(
+        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, Averaged over {lfreq}-{hfreq} Hz, Shuffled)"
     )
     fig.tight_layout()
-    plt.savefig(destination / "freq_domain_averaging_shuffled.png")
+    plt.savefig(destination / "freq_domain_averaging_comparison.png")
     plt.close(fig)
 
     ## Freq Domain (No Averaging)
-    clf_scores = run_classifier_comparison(
+    ## Fit models
+    clf_scores_unshuffled = run_classifier_comparison(
         epochs_anat,
         labels,
         cv,
@@ -462,23 +453,8 @@ def shuffle_channels_experiment(
         hfreq=hfreq,
         random_state=random_state,
     )
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-    plot_accuracies(clf_scores, ax=axs[0])
-    axs[0].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, No Averaging, {lfreq}-{hfreq} Hz, Unshuffled)",
-    )
-    plot_roc_aucs(clf_scores, ax=axs[1])
-    axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, No Averaging, {lfreq}-{hfreq} Hz, Unshuffled)",
-    )
-    fig.tight_layout()
-    plt.savefig(destination / "freq_domain_no_averaging_unshuffled.png")
-    plt.close(fig)
 
-    clf_scores = run_classifier_comparison(
+    clf_scores_shuffled = run_classifier_comparison(
         epochs_anat,
         labels,
         cv,
@@ -490,20 +466,34 @@ def shuffle_channels_experiment(
         hfreq=hfreq,
         random_state=random_state,
     )
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+
+    ## Plot results
+    fig, axs = plt.subplots(nrows=2, ncols=2, dpi=100, figsize=(16, 12), sharey="row")
     axs = axs.flatten()
-    plot_accuracies(clf_scores, ax=axs[0])
+
+    plot_accuracies(clf_scores_unshuffled, ax=axs[0])
     axs[0].set(
         ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, No Averaging {lfreq}-{hfreq} Hz, Shuffled)",
+        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, No Averaging, {lfreq}-{hfreq} Hz, Unshuffled)",
     )
-    plot_roc_aucs(clf_scores, ax=axs[1])
+
+    plot_accuracies(clf_scores_unshuffled, ax=axs[1])
     axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, No Averaging {lfreq}-{hfreq} Hz, Shuffled)",
+        title=f"{subject.upper()}: Accuracy of Classifiers (n={nfreqs} freq bins, No Averaging, {lfreq}-{hfreq} Hz, Shuffled)"
+    )
+
+    plot_roc_aucs(clf_scores_unshuffled, ax=axs[2])
+    axs[2].set(
+        ylabel="ROC AUC",
+        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, No Averaging, {lfreq}-{hfreq} Hz, Unshuffled)",
+    )
+
+    plot_roc_aucs(clf_scores_shuffled, ax=axs[3])
+    axs[3].set(
+        title=f"{subject.upper()}: ROC AUCs of Classifiers (n={nfreqs} freq bins, No Averaging, {lfreq}-{hfreq} Hz, Shuffled)"
     )
     fig.tight_layout()
-    plt.savefig(destination / "freq_domain_no_averaging_shuffled.png")
+    plt.savefig(destination / "freq_domain_no_averaging_comparison.png")
     plt.close(fig)
 
 
@@ -522,6 +512,7 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
     """
     docstring
     """
+    subject = bids_path.subject
     destination = Path(destination_path) / "movement_onset_experiment"
 
     if not os.path.exists(destination):
@@ -570,7 +561,7 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
         nfreqs = 10
         lfreq, hfreq = (70, 200)
         freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
-        n_cycles = freqs / 2.0  # different number of cycle per frequency
+        n_cycles = freqs / 3.0  # different number of cycle per frequency
 
         after_power = tfr_morlet(
             after,
@@ -660,36 +651,10 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
     )
     axs[0].legend(loc="lower right")
 
-    mtsmorf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
-    )
-
-    srerf = rerfClassifier(
-        projection_matrix="S-RerF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
-    )
-
-    lr = LogisticRegression(random_state=random_state)
-    rf = RandomForestClassifier(random_state=random_state)
-    dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
-
     clf_scores = dict()
-    clfs = [
-        mtsmorf,
-        srerf,
-        rf,
-        lr,
-        dummy,
-    ]
+    clfs = initialize_classifiers(
+        image_height, image_width, n_jobs=-1, random_state=random_state
+    )
 
     for clf in clfs:
         if clf.__class__.__name__ == "rerfClassifier":
@@ -719,6 +684,7 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
     fig.tight_layout()
     plt.savefig(destination / f"movement_onset_{domain}_domain.png")
     plt.close(fig)
+    print(f"Figure saved at {destination}/movement_onset_{domain}_domain.png")
 
 
 def plot_paired_cvs_baseline(scores1, scores2, axs):
@@ -796,7 +762,8 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
         bids_path,
         kind="ieeg",
         tmin=-0.75,
-        tmax=1.25,
+        # tmax=1.25,
+        tmax=0.5,
         picks=None,
         event_key="Left Target",
     )
@@ -812,7 +779,8 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     epochs.drop(unsuccessful_trial_inds)
 
     cropped = epochs.copy()
-    cropped = cropped.crop(tmin=-0.5, tmax=1.0)
+    # cropped = cropped.crop(tmin=-0.5, tmax=1.0)
+    cropped = cropped.crop(tmin=-0.3, tmax=0.3)
 
     cropped_data = cropped.get_data()
     ntrials, nchs, nsteps = cropped_data.shape
@@ -854,7 +822,13 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
 
     ## Apply baseline
     baseline = read_dataset(
-        bids_path, kind="ieeg", tmin=0.0, tmax=2.0, picks=None, event_key="At Center"
+        bids_path,
+        kind="ieeg", 
+        tmin=0.0, 
+        # tmax=2.0,
+        tmax=1.25, 
+        picks=None, 
+        event_key="At Center"
     )
     baseline.load_data()
 
@@ -876,7 +850,8 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
 
     ## Crop
     times = epochs.times
-    inds = np.where((times >= -0.5) & (times <= 1.0))[0]
+    # inds = np.where((times >= -0.5) & (times <= 1.0))[0]
+    inds = np.where((times >= -0.3) & (times <= 0.3))[0]
     baselined_epochs = baselined_epochs[:, :, inds]
 
     # Create X, y data
@@ -922,7 +897,7 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     ## Freq Domain
     nfreqs = 10
     freqs = np.logspace(*np.log10([70, 200]), num=nfreqs)
-    n_cycles = freqs / 2.0  # different number of cycle per frequency
+    n_cycles = freqs / 3.0  # different number of cycle per frequency
     power = tfr_morlet(
         epochs,
         freqs=freqs,
@@ -938,7 +913,8 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     avg_freq_data = np.mean(hi_gamma, axis=2)
 
     # Trim time window
-    inds = np.where((power.times >= -0.5) & (power.times <= 1.0))[0]
+    # inds = np.where((power.times >= -0.5) & (power.times <= 1.0))[0]
+    inds = np.where((power.times >= -0.3) & (power.times <= 0.3))[0]
     avg_freq_data = avg_freq_data[:, :, inds]
 
     # Create X, y data
@@ -987,7 +963,8 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
 
     ## Crop
     times = power.times
-    inds = np.where((times >= -0.5) & (times <= 1.0))[0]
+    # inds = np.where((times >= -0.5) & (times <= 1.0))[0]
+    inds = np.where((times >= -0.3) & (times <= 0.3))[0]
     baselined_power = baselined_power[:, :, :, inds]
 
     avg_freq_data_baseline = np.mean(baselined_power, axis=2)
@@ -1035,6 +1012,108 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     plt.close(fig)
 
 
+def frequency_band_comparison(epochs, destination_path, random_state=None):
+    """
+    docstring
+    """
+    destination = Path(destination_path)
+
+    if not os.path.exists(destination):
+        os.makedirs(destination)
+
+    frequency_bands = dict(
+        delta=(0.5, 4),
+        theta=(4, 8),
+        alpha=(8, 13),
+        beta=(13, 30),
+        gamma=(30, 70),
+        hi_gamma=(70, 200),
+    )
+
+    scores = dict()
+
+    rng = 1
+    nfreqs = 10
+    n_splits = 5
+    cv = StratifiedKFold(n_splits=n_splits)
+
+    metrics = [
+        "accuracy",
+        "roc_auc_ovr",
+    ]
+
+    for name, (lfreq, hfreq) in frequency_bands.items():
+        freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
+        n_cycles = freqs / 2.0  # different number of cycle per frequency
+        power = tfr_morlet(
+            epochs,
+            freqs=freqs,
+            n_cycles=n_cycles,
+            average=False,
+            return_itc=False,
+            decim=3,
+            n_jobs=1,
+        )
+
+        # Extract data and crop
+        inds = np.where((power.times >= -0.3) & (power.times <= 0.3))[0]
+        power_data = power.data[:, :, :, inds]
+        ntrials, nchs, nfreqs, nsteps = power_data.shape
+
+        included_trials = np.isin(labels, [0, 1, 2, 3])
+
+        # Create X, y data
+        X = power_data[included_trials].reshape(np.sum(included_trials), -1)
+        y = labels[included_trials]
+
+        mtsmorf = rerfClassifier(
+            projection_matrix="MT-MORF",
+            max_features="auto",
+            n_jobs=-1,
+            random_state=random_state,
+            image_height=nchs * nfreqs,
+            image_width=nsteps,
+        )
+
+        scores[name] = cv_fit(
+            mtsmorf,
+            X,
+            y,
+            metrics=metrics,
+            cv=cv,
+            n_jobs=None,
+            return_train_score=True,
+            return_estimator=True,
+        )
+
+
+    fig, axs = plt.subplots(ncols=2, figsize=(22, 6), dpi=100)
+    axs = axs.flatten()
+
+    ## Accuracy comparison
+    id_col = pd.Series(range(1, n_splits + 1))
+    accuracies = {name: score["test_accuracy"] for name, score in scores.items()}
+    accuracies["ID"] = id_col
+    
+    df = pd.DataFrame(accuracies)
+    idx = [list(scores.keys())[-1]] + list(scores.keys())[:-1]  # Re-order so that control is hi-gamma band
+    my_data = dabest.load(df, idx=idx, resamples=100, random_seed=rng)
+    my_data.mean_diff.plot(ax=axs[0])
+    axs[0].set(title=f"{subject.upper()} Accuracy Comparison between Frequency Bands")
+
+    ## ROC AUC comparison
+    roc_auc_ovrs = {name: score["test_roc_auc_ovr"] for name, score in scores.items()}
+    roc_auc_ovrs["ID"] = id_col
+    df = pd.DataFrame(roc_auc_ovrs)
+    my_data = dabest.load(df, idx=idx, resamples=100, random_seed=rng)
+    my_data.mean_diff.plot(ax=axs[1])
+    axs[1].set(title=f"{subject.upper()} ROC AUC Comparison between Frequency Bands")
+
+    fig.tight_layout()
+    plt.savefig(destination / f"{subject}_frequency_band_comparison_tmin=-0.5_tmax=1.0.png")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -1047,6 +1126,8 @@ if __name__ == "__main__":
             "movement_onset_time",
             "movement_onset_frequency",
             "baseline",
+            "frequency_bands",
+            "plot_event_durations",
         ],
         help="which experiment to run",
     )
@@ -1175,3 +1256,21 @@ if __name__ == "__main__":
             results_path / subject,
             random_state=rng,
         )
+
+    elif experiment == "frequency_bands":
+        epochs.crop(tmin=-0.5, tmax=1.0)
+        frequency_band_comparison(
+            epochs, 
+            results_path / subject, 
+            random_state=rng
+        )
+
+    elif experiment == "plot_event_durations":
+        fig, ax = plt.subplots(dpi=150, figsize=(8, 6))
+
+        behav, events = map(pd.DataFrame, get_trial_info(bids_path))
+        plot_event_durations(behav, events, ax=ax)
+        
+        ax.set(ylabel="duration (s)", title=f"{subject.upper()}: Duration of Events")
+        fig.tight_layout()
+        plt.savefig(results_path / subject / f"{subject}_event_durations.png")

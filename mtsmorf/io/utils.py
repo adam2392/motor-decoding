@@ -16,7 +16,6 @@ from mne_bids.tsv_handler import _to_tsv
 from mne_bids.path import _find_matching_sidecar
 from mne_bids.path import _parse_ext
 
-from rerf.rerfClassifier import rerfClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.dummy import DummyClassifier
@@ -24,6 +23,10 @@ from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, roc_curve
 from sklearn.model_selection import cross_validate
 
+try:
+    from rerf.rerfClassifier import rerfClassifier
+except ModuleNotFoundError:
+    print("rerf could not be imported.")
 
 logger = logging.getLogger(__name__)
 

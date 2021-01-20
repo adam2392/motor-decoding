@@ -24,6 +24,51 @@ colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
 plt.style.use(["science", "ieee", "no-latex"])
 
 
+def plot_event_durations(behav, events, jitter=0.025, ax=None):
+    """
+    docstring
+    """
+    if not isinstance(behav, pd.DataFrame):
+        behav = pd.DataFrame(behav)
+
+    if not isinstance(events, pd.DataFrame):
+        events = pd.DataFrame(events)
+    
+    if ax is None:
+        ax = plt.gca()
+
+    # Convert column to numeric dtype
+    events["onset"] = pd.to_numeric(events["onset"])
+
+    # Get difference between Left Target onset and its preceding and succeeding events
+    inds = (events.trial_type == "Left Target")
+    go_cue_duration = events["onset"].diff(periods=-1).abs()[inds]
+    left_target_duration = events["onset"].diff(periods=1)[inds]
+
+    df = pd.DataFrame({'"Go Cue" duration': go_cue_duration,
+                    '"Left Target" duration': left_target_duration})
+
+    # Plot stripplot with some jitter in the x-coordinate
+    df_x_jitter = pd.DataFrame(np.random.normal(loc=0, scale=jitter, size=df.values.shape), index=df.index, columns=df.columns)
+    df_x_jitter += np.arange(len(df.columns))
+
+    for col in df:
+        ax.plot(df_x_jitter[col], df[col], 'o', alpha=.40, zorder=1, ms=8, mew=1)
+    ax.set_xticks(range(len(df.columns)))
+    ax.set_xticklabels(df.columns)
+    ax.set_xlim(-0.5,len(df.columns)-0.5)
+    ax.set_ylim(-0.5, 2.5)
+
+    for idx in df.index:
+        ax.plot(
+            df_x_jitter.loc[idx,['"Go Cue" duration','"Left Target" duration']], 
+            df.loc[idx,['"Go Cue" duration','"Left Target" duration']], 
+            color = 'grey', linewidth = 0.5, alpha=0.75, linestyle = '--', zorder=-1
+        )
+
+    return ax
+
+
 def _mean_confidence_interval(data, confidence=0.95):
     a = 1.0 * np.array(data)
     n = a.shape[0]

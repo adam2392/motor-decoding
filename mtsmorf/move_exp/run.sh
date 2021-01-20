@@ -19,11 +19,12 @@ declare -a subjects=(
 for subject in "${subjects[@]}"
 do
     echo "Running $subject..."
-    # python3 move_spectral_power.py $subject
-    # python3 ./move_exp/experiments.py $subject -experiment baseline
-    # python3 ./move_exp/experiments.py $subject -experiment movement_onset_time
-    python3 ./move_exp/experiments.py $subject -experiment movement_onset_frequency
     # python3 ./move_exp/experiments.py $subject -experiment shuffle
+    # python3 ./move_exp/experiments.py $subject -experiment movement_onset_time
+    # python3 ./move_exp/experiments.py $subject -experiment movement_onset_frequency
+    # python3 ./move_exp/experiments.py $subject -experiment baseline
+    # python3 ./move_exp/experiments.py $subject -experiment frequency_bands
+    python3 ./move_exp/experiments.py $subject -experiment plot_event_durations
     # python3 ./move_exp/move_spectral_power.py $subject --replot-signals True --feat-importances False --rerun-fit False
     echo "Done with $subject..."
 done

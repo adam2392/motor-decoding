@@ -34,15 +34,18 @@ def str2bool(v):
 
 
 if __name__ == "__main__":
+    # set time window
+    # tmin, tmax = (-0.5, 1.0)
+    # tmin, tmax = (-0.75, 1.25)  # This includes the Hit Target event, need to truncate
+    # tmin, tmax = (-0.75, 0.5)   # Only encapsulates the Left Target event
+    tmin, tmax = (-0.5, 0.5)
+
     # bids_root = Path("/workspaces/research/mnt/data/efri/")
     bids_root = Path("/Volumes/Mac/research/data/efri/")
     
     derivatives_path = (
-        bids_root / "derivatives" / "preprocessed" / "tmin=-0.75-tmax=1.25" / "band-pass=1-1000Hz-downsample=500"
+        bids_root / "derivatives" / "preprocessed" / f"tmin={tmin}-tmax={tmax}" / "band-pass=1-1000Hz-downsample=500"
     )
-    # derivatives_path = (
-    #     bids_root / "derivatives" / "preprocessed" / "band-pass=70-200Hz-downsample=500"
-    # )
 
     if not os.path.exists(derivatives_path):
         os.makedirs(derivatives_path)
@@ -86,10 +89,6 @@ if __name__ == "__main__":
             extension=".vhdr",
             root=bids_root,
         )
-
-        # set time window
-        # tmin, tmax = (-0.5, 1.0)
-        tmin, tmax = (-0.75, 1.25)
 
         # get EEG data
         picks = []
