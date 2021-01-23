@@ -24,7 +24,8 @@ do
     # python3 ./move_exp/experiments.py $subject -experiment movement_onset_frequency
     # python3 ./move_exp/experiments.py $subject -experiment baseline
     # python3 ./move_exp/experiments.py $subject -experiment frequency_bands
-    python3 ./move_exp/experiments.py $subject -experiment plot_event_durations
+    # python3 ./move_exp/experiments.py $subject -experiment plot_event_durations
+    # python3 ./move_exp/experiments.py $subject -experiment plot_event_onsets
     # python3 ./move_exp/move_spectral_power.py $subject --replot-signals True --feat-importances False --rerun-fit False
     echo "Done with $subject..."
 done

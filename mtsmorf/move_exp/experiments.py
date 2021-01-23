@@ -24,7 +24,8 @@ from plotting import (
     plot_roc_cv,
     plot_accuracies,
     plot_roc_aucs,
-    plot_event_durations
+    plot_event_durations,
+    plot_event_onsets
 )
 
 # Hack-y way to import from files in sibling "io" directory
@@ -1128,6 +1129,7 @@ if __name__ == "__main__":
             "baseline",
             "frequency_bands",
             "plot_event_durations",
+            "plot_event_onsets",
         ],
         help="which experiment to run",
     )
@@ -1266,11 +1268,106 @@ if __name__ == "__main__":
         )
 
     elif experiment == "plot_event_durations":
-        fig, ax = plt.subplots(dpi=150, figsize=(8, 6))
-
-        behav, events = map(pd.DataFrame, get_trial_info(bids_path))
-        plot_event_durations(behav, events, ax=ax)
+        subjects = [
+            "efri02", 
+            "efri06", 
+            "efri07", 
+            # "efri09",  # Too few samples
+            # "efri10",  # Unequal data size vs label size
+            "efri13", 
+            "efri14", 
+            "efri15", 
+            "efri18", 
+            "efri20", 
+            "efri26", 
+        ]
         
-        ax.set(ylabel="duration (s)", title=f"{subject.upper()}: Duration of Events")
+        fig, axs = plt.subplots(nrows=3, ncols=3, dpi=300, figsize=(18, 18))
+        axs = axs.flatten()
+
+        for i, subject in enumerate(subjects):
+            bids_path = BIDSPath(
+                subject=subject,
+                session=session,
+                task=task,
+                acquisition=acquisition,
+                run=run,
+                suffix=kind,
+                extension=".vhdr",
+                root=bids_root,
+            )
+
+            ax = axs[i]
+
+            behav, events = map(pd.DataFrame, get_trial_info(bids_path))
+            plot_event_durations(behav, events, ax=ax, random_state=rng)
+            
+            ax.set(
+                ylabel='Onset Relative to "Go Cue" (s)',
+                title=f"{subject.upper()}: Onset of Events",
+            )
         fig.tight_layout()
-        plt.savefig(results_path / subject / f"{subject}_event_durations.png")
+        plt.savefig(results_path / "all_subjects_event_durations.png")
+
+        # fig, ax = plt.subplots(dpi=150, figsize=(8, 6))
+
+        # behav, events = map(pd.DataFrame, get_trial_info(bids_path))
+        # plot_event_durations(behav, events, ax=ax, random_state=rng)
+        
+        # ax.set(ylabel="duration (s)", title=f"{subject.upper()}: Duration of Events")
+        # fig.tight_layout()
+        # plt.savefig(results_path / subject / f"{subject}_event_durations.png")
+
+
+    elif experiment == "plot_event_onsets":
+        subjects = [
+            "efri02", 
+            "efri06", 
+            "efri07", 
+            # "efri09",  # Too few samples
+            # "efri10",  # Unequal data size vs label size
+            "efri13", 
+            "efri14", 
+            "efri15", 
+            "efri18", 
+            "efri20", 
+            "efri26", 
+        ]
+        
+        fig, axs = plt.subplots(nrows=3, ncols=3, dpi=300, figsize=(18, 18))
+        axs = axs.flatten()
+
+        for i, subject in enumerate(subjects):
+            bids_path = BIDSPath(
+                subject=subject,
+                session=session,
+                task=task,
+                acquisition=acquisition,
+                run=run,
+                suffix=kind,
+                extension=".vhdr",
+                root=bids_root,
+            )
+
+            ax = axs[i]
+
+            behav, events = map(pd.DataFrame, get_trial_info(bids_path))
+            plot_event_onsets(behav, events, ax=ax, random_state=rng)
+            
+            ax.set(
+                ylabel='Onset Relative to "Go Cue" (s)',
+                title=f"{subject.upper()}: Onset of Events",
+            )
+        fig.tight_layout()
+        plt.savefig(results_path / "all_subjects_event_onsets.png")
+        # fig, ax = plt.subplots(dpi=150, figsize=(8, 6))
+
+        # behav, events = map(pd.DataFrame, get_trial_info(bids_path))
+        # plot_event_onsets(behav, events, ax=ax, random_state=rng)
+        
+        # ax.set(
+        #     ylabel='Onset Relative to "Go Cue" (s)',
+        #     title=f"{subject.upper()}: Onset of Events",
+        # )
+        # fig.tight_layout()
+        # plt.savefig(results_path / subject / f"{subject}_event_onsets.png")

@@ -8,10 +8,12 @@ import seaborn as sns
 from scipy import stats
 
 from matplotlib.patches import Patch
+from mne_bids import read_raw_bids
 from mpl_toolkits.axes_grid1 import AxesGrid
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
+from sklearn.utils import check_random_state
 
 label_names = {0: "Down", 1: "Right", 2: "Up", 3: "Left"}
 colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
@@ -24,48 +26,156 @@ colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
 plt.style.use(["science", "ieee", "no-latex"])
 
 
-def plot_event_durations(behav, events, jitter=0.025, ax=None):
+def plot_event_durations(behav, events, jitter=0.025, ax=None, random_state=None):
     """
     docstring
     """
+
+    rng = check_random_state(random_state)
+
     if not isinstance(behav, pd.DataFrame):
         behav = pd.DataFrame(behav)
 
     if not isinstance(events, pd.DataFrame):
         events = pd.DataFrame(events)
-    
+
     if ax is None:
         ax = plt.gca()
 
-    # Convert column to numeric dtype
-    events["onset"] = pd.to_numeric(events["onset"])
+    ## Convert columns to numeric dtype
+    events.onset = pd.to_numeric(events.onset)
+    behav[["successful_trial_flag", "force_magnitude"]] = behav[
+        ["successful_trial_flag", "force_magnitude"]
+    ].apply(pd.to_numeric)
 
-    # Get difference between Left Target onset and its preceding and succeeding events
-    inds = (events.trial_type == "Left Target")
-    go_cue_duration = events["onset"].diff(periods=-1).abs()[inds]
-    left_target_duration = events["onset"].diff(periods=1)[inds]
+    assert len(events[events.trial_type == "Left Target"]) == len(
+        behav[behav.successful_trial_flag == 1]
+    )
 
-    df = pd.DataFrame({'"Go Cue" duration': go_cue_duration,
-                    '"Left Target" duration': left_target_duration})
+    ## Get difference between Left Target onset and its preceding and succeeding events
+    inds = events.trial_type == "Left Target"
+    go_cue_duration = events.onset.diff(periods=-1).abs()[inds]
+    left_target_duration = events.onset.diff(periods=1)[inds]
 
-    # Plot stripplot with some jitter in the x-coordinate
-    df_x_jitter = pd.DataFrame(np.random.normal(loc=0, scale=jitter, size=df.values.shape), index=df.index, columns=df.columns)
+    ## Remove unsuccessful and perturbed trials
+    successful_trials = behav[behav.successful_trial_flag == 1]
+    successful_trials.index = go_cue_duration.index
+    unperturbed_trial_inds = successful_trials.force_magnitude == 0
+    go_cue_duration = go_cue_duration[unperturbed_trial_inds]
+    left_target_duration = left_target_duration[unperturbed_trial_inds]
+
+    ## Plot stripplot with some jitter in the x-coordinate
+    df = pd.DataFrame(
+        {
+            '"Go Cue" duration': go_cue_duration,
+            '"Left Target" duration': left_target_duration,
+        }
+    )
+
+    jitter = 0.025
+    df_x_jitter = pd.DataFrame(
+        rng.normal(loc=0, scale=jitter, size=df.values.shape),
+        index=df.index,
+        columns=df.columns,
+    )
     df_x_jitter += np.arange(len(df.columns))
 
     for col in df:
-        ax.plot(df_x_jitter[col], df[col], 'o', alpha=.40, zorder=1, ms=8, mew=1)
+        ax.plot(df_x_jitter[col], df[col], "o", alpha=0.40, zorder=1, ms=8, mew=1)
     ax.set_xticks(range(len(df.columns)))
     ax.set_xticklabels(df.columns)
-    ax.set_xlim(-0.5,len(df.columns)-0.5)
+    ax.set_xlim(-0.5, len(df.columns) - 0.5)
     ax.set_ylim(-0.5, 2.5)
 
     for idx in df.index:
         ax.plot(
-            df_x_jitter.loc[idx,['"Go Cue" duration','"Left Target" duration']], 
-            df.loc[idx,['"Go Cue" duration','"Left Target" duration']], 
-            color = 'grey', linewidth = 0.5, alpha=0.75, linestyle = '--', zorder=-1
+            df_x_jitter.loc[idx, ['"Go Cue" duration', '"Left Target" duration']],
+            df.loc[idx, ['"Go Cue" duration', '"Left Target" duration']],
+            color="grey",
+            linewidth=0.5,
+            alpha=0.75,
+            linestyle="--",
+            zorder=-1,
         )
 
+    return ax
+
+
+def plot_event_onsets(behav, events, jitter=0.025, ax=None, random_state=None):
+    """
+    docstring
+    """
+    rng = check_random_state(random_state)
+
+    if not isinstance(behav, pd.DataFrame):
+        behav = pd.DataFrame(behav)
+
+    if not isinstance(events, pd.DataFrame):
+        events = pd.DataFrame(events)
+
+    if ax is None:
+        ax = plt.gca()
+
+    ## Convert columns to numeric dtype
+    events.onset = pd.to_numeric(events.onset)
+    behav[["successful_trial_flag", "force_magnitude"]] = behav[
+        ["successful_trial_flag", "force_magnitude"]
+    ].apply(pd.to_numeric)
+
+    ## Get onsets for relevant events
+    left_target_inds = events.index[events.trial_type == "Left Target"]
+
+    go_cue_onset = events.onset.iloc[left_target_inds - 1]
+    go_cue_onset.index = np.arange(len(go_cue_onset))
+    left_target_onset = events.onset.iloc[left_target_inds]
+    left_target_onset.index = np.arange(len(left_target_onset))
+    hit_target_onset = events.onset.iloc[left_target_inds + 1]
+    hit_target_onset.index = np.arange(len(hit_target_onset))
+
+    ## Remove unsuccessful and perturbed trials
+    successful_trials = behav[behav.successful_trial_flag == 1]
+    successful_trials.index = go_cue_onset.index
+    unperturbed_trial_inds = successful_trials.force_magnitude == 0
+
+    go_cue_onset = go_cue_onset[unperturbed_trial_inds]
+    left_target_onset = left_target_onset[unperturbed_trial_inds]
+    hit_target_onset = hit_target_onset[unperturbed_trial_inds]
+
+    ## Plot data in strip plot
+    df = pd.DataFrame(
+        {
+            '"Go Cue"': go_cue_onset - go_cue_onset,
+            '"Left Target"': left_target_onset - go_cue_onset,
+            '"Hit Target"': hit_target_onset - go_cue_onset,
+        }
+    )
+
+    jitter = 0.025
+    df_x_jitter = pd.DataFrame(
+        rng.normal(loc=0, scale=jitter, size=df.values.shape),
+        index=df.index,
+        columns=df.columns,
+    )
+    df_x_jitter += np.arange(len(df.columns))
+
+    for col in df:
+        ax.plot(df_x_jitter[col], df[col], "o", alpha=0.40, zorder=1, ms=8, mew=1)
+    ax.set_xticks(range(len(df.columns)))
+    ax.set_xticklabels(df.columns)
+    ax.set_xlim(-0.5, len(df.columns) - 0.5)
+    ax.set_ylim(-0.5, 4)
+
+    for idx in df.index:
+        ax.plot(
+            df_x_jitter.loc[idx, ['"Go Cue"', '"Left Target"', '"Hit Target"']],
+            df.loc[idx, ['"Go Cue"', '"Left Target"', '"Hit Target"']],
+            color="grey",
+            linewidth=0.5,
+            alpha=0.75,
+            linestyle="--",
+            zorder=-1,
+        )
+    
     return ax
 
 
@@ -251,15 +361,21 @@ def plot_roc_multiclass_cv(y_pred_probas, X, y, test_inds, ax=None):
     return ax
 
 
-def plot_feature_importances(result, ch_names, times, image_height, image_width, ax=None):
+def plot_feature_importances(
+    result, ch_names, times, image_height, image_width, ax=None
+):
     nchs = len(ch_names)
     nsteps = len(times)
 
     if ax is None:
         ax = plt.gca()
 
-    feat_importance_means = np.array(result["importances_mean"]).reshape(image_height, image_width)
-    feat_importance_stds = np.array(result["importances_std"]).reshape(image_height, image_width)
+    feat_importance_means = np.array(result["importances_mean"]).reshape(
+        image_height, image_width
+    )
+    feat_importance_stds = np.array(result["importances_std"]).reshape(
+        image_height, image_width
+    )
 
     df_feat_importances = pd.DataFrame(feat_importance_means)
 
@@ -446,12 +562,20 @@ def plot_accuracies(clf_scores, ax=None):
     if ax is None:
         ax = plt.gca()
 
-    accs = np.array([np.mean(scores["test_accuracy"]) for scores in clf_scores.values()])
-    acc_std = np.array([np.std(scores["test_accuracy"]) for scores in clf_scores.values()])
+    accs = np.array(
+        [np.mean(scores["test_accuracy"]) for scores in clf_scores.values()]
+    )
+    acc_std = np.array(
+        [np.std(scores["test_accuracy"]) for scores in clf_scores.values()]
+    )
 
-    ax.errorbar(list(clf_scores.keys()), accs, yerr=acc_std, fmt='o', markersize=8, capsize=15)
-    ax.axhline(np.mean(clf_scores["MT-MORF"]["test_accuracy"]), lw=1, color='k', ls='--')
-    
+    ax.errorbar(
+        list(clf_scores.keys()), accs, yerr=acc_std, fmt="o", markersize=8, capsize=15
+    )
+    ax.axhline(
+        np.mean(clf_scores["MT-MORF"]["test_accuracy"]), lw=1, color="k", ls="--"
+    )
+
     return ax
 
 
@@ -459,10 +583,23 @@ def plot_roc_aucs(clf_scores, ax=None):
     if ax is None:
         ax = plt.gca()
 
-    roc_aucs = np.array([np.mean(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()])
-    roc_aucs_std = np.array([np.std(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()])
+    roc_aucs = np.array(
+        [np.mean(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()]
+    )
+    roc_aucs_std = np.array(
+        [np.std(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()]
+    )
 
-    ax.errorbar(list(clf_scores.keys()), roc_aucs, yerr=roc_aucs_std, fmt='o', markersize=8, capsize=15)
-    ax.axhline(np.mean(clf_scores["MT-MORF"]["test_roc_auc_ovr"]), lw=1, color='k', ls='--')
-    
+    ax.errorbar(
+        list(clf_scores.keys()),
+        roc_aucs,
+        yerr=roc_aucs_std,
+        fmt="o",
+        markersize=8,
+        capsize=15,
+    )
+    ax.axhline(
+        np.mean(clf_scores["MT-MORF"]["test_roc_auc_ovr"]), lw=1, color="k", ls="--"
+    )
+
     return ax
