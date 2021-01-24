@@ -16,16 +16,17 @@ from rerf.rerfClassifier import rerfClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, roc_curve
+from sklearn.metrics import cohen_kappa_score, confusion_matrix, make_scorer, roc_curve
 from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklearn.utils import check_random_state
 
+from .experiment_functions import preprocess_epochs
 from plotting import (
     plot_roc_cv,
     plot_accuracies,
     plot_roc_aucs,
     plot_event_durations,
-    plot_event_onsets
+    plot_event_onsets,
 )
 
 # Hack-y way to import from files in sibling "io" directory
@@ -33,38 +34,7 @@ sys.path.append(str(Path(__file__).parent.parent / "io"))
 sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
 
 from read import read_dataset, read_label, read_trial, get_trial_info, _get_bad_chs
-
-
-def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=None):
-    """
-    docstring
-    """
-
-    mtsmorf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
-    )
-
-    srerf = rerfClassifier(
-        projection_matrix="S-RerF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
-    )
-
-    lr = LogisticRegression(random_state=random_state)
-    rf = RandomForestClassifier(random_state=random_state)
-    dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
-
-    clfs = [mtsmorf, srerf, lr, rf, dummy]
-
-    return clfs
+from utils import initialize_classifiers
 
 
 def prepare_epochs(bids_path):
@@ -498,17 +468,6 @@ def shuffle_channels_experiment(
     plt.close(fig)
 
 
-def filter_epochs(epochs, resample_rate=500):
-    # Low-pass filter up to sfreq/2
-    fs = epochs.info["sfreq"]
-    new_epochs = epochs.filter(l_freq=1, h_freq=fs / 2 - 1)
-
-    # Downsample epochs to 500 Hz
-    new_epochs = new_epochs.resample(resample_rate)
-
-    return new_epochs
-
-
 def movement_onset_experiment(bids_path, destination_path, domain, random_state=None):
     """
     docstring
@@ -519,40 +478,24 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
     if not os.path.exists(destination):
         os.makedirs(destination)
 
-    before = read_dataset(
-        bids_path,
-        kind="ieeg",
-        tmin=0,
-        tmax=1.0,
-        picks=None,
-        event_key="At Center",
-        verbose=True,
-    )
+    before = read_dataset(bids_path, kind="ieeg", tmin=0, tmax=1.0, 
+                          event_key="At Center")
     before.load_data()
-    before_data = filter_epochs(before).get_data()
+    before_data = preprocess_epochs(before).get_data()
 
-    after = read_dataset(
-        bids_path,
-        kind="ieeg",
-        tmin=-0.25,
-        tmax=0.75,
-        picks=None,
-        event_key="Left Target",
-        verbose=True,
-    )
+    after = read_dataset(bids_path, kind="ieeg", tmin=-0.25, tmax=0.75, 
+                         event_key="Left Target")
     after.load_data()
-    after_data = filter_epochs(after).get_data()
+    after_data = preprocess_epochs(after).get_data()
 
     if domain.lower() == "time":
         ## Time Domain
         ntrials, nchs, nsteps = before_data.shape
 
-        X = np.vstack(
-            [
+        X = np.vstack([
                 before_data.reshape(before_data.shape[0], -1),  # class 0
                 after_data.reshape(after_data.shape[0], -1),  # class 1
-            ]
-        )
+            ])
         y = np.concatenate([np.zeros(len(before_data)), np.ones(len(after_data))])
         image_height = nchs
         image_width = nsteps
@@ -564,33 +507,19 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
         freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
         n_cycles = freqs / 3.0  # different number of cycle per frequency
 
-        after_power = tfr_morlet(
-            after,
-            freqs=freqs,
-            n_cycles=n_cycles,
-            average=False,
-            return_itc=False,
-            decim=3,
-            n_jobs=1,
-        ).data
-        before_power = tfr_morlet(
-            before,
-            freqs=freqs,
-            n_cycles=n_cycles,
-            average=False,
-            return_itc=False,
-            decim=3,
-            n_jobs=1,
-        ).data
+        after_power = tfr_morlet(after, freqs=freqs, n_cycles=n_cycles,
+                                 average=False, return_itc=False, decim=3,
+                                 n_jobs=1).data
+        before_power = tfr_morlet(before, freqs=freqs, n_cycles=n_cycles,
+                                  average=False, return_itc=False, decim=3,
+                                  n_jobs=1).data
 
         ntrials, nchs, nfreqs, nsteps = before_power.shape
 
-        X = np.vstack(
-            [
+        X = np.vstack([
                 before_power.reshape(before_power.shape[0], -1),  # class 0
                 after_power.reshape(after_power.shape[0], -1),  # class 1
-            ]
-        )
+            ])
         y = np.concatenate([np.zeros(len(before_power)), np.ones(len(after_power))])
 
         image_height = nchs * nfreqs
@@ -603,54 +532,13 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
 
     # Perform K-Fold cross validation
     n_splits = 5
-    cv = StratifiedKFold(n_splits=n_splits, shuffle=False)
+    cv = StratifiedKFold(n_splits)
 
-    metrics = [
-        "accuracy",
-        "roc_auc_ovr",
-    ]
-
-    mtsmorf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=random_state,
-        image_height=image_height,
-        image_width=image_width,
+    metrics = dict(
+        accuracy="accuracy",
+        cohen_kappa_score=make_scorer(cohen_kappa_score),
+        roc_auc_ovr="roc_auc_ovr",
     )
-
-    ## Cross validation. Fit model
-    stratified_kf_scores = cv_fit(
-        mtsmorf,
-        X,
-        y,
-        metrics=metrics,
-        cv=cv,
-        n_jobs=None,
-        return_train_score=True,
-        return_estimator=True,
-    )
-
-    ## Plot results
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-
-    plot_roc_cv(
-        stratified_kf_scores["test_predict_proba"],
-        X,
-        y,
-        stratified_kf_scores["test_inds"],
-        ax=axs[0],
-    )
-
-    axs[0].set(
-        xlabel="False Positive Rate",
-        ylabel="True Positive Rate",
-        xlim=[-0.05, 1.05],
-        ylim=[-0.05, 1.05],
-        title=f"{subject.upper()} MT-MORF ROC Curve ('At Center' vs. 'Left Target', {domain.capitalize()} Domain)",
-    )
-    axs[0].legend(loc="lower right")
 
     clf_scores = dict()
     clfs = initialize_classifiers(
@@ -665,24 +553,29 @@ def movement_onset_experiment(bids_path, destination_path, domain, random_state=
         else:
             clf_name = clf.__class__.__name__
 
-        clf_scores[clf_name] = cv_fit(
-            clf,
-            X,
-            y,
-            cv=cv,
-            metrics=metrics,
-            n_jobs=None,
-            return_train_score=True,
-            return_estimator=True,
-        )
+        clf_scores[clf_name] = cv_fit(clf, X, y, cv=cv, metrics=metrics, 
+                                      n_jobs=None, return_train_score=True, 
+                                      return_estimator=True)
 
     ## Plot results
+    # 1. Plot roc curves
+    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+    axs = axs.flatten()
+
+    for clf_name, scores in clf_scores.items():
+        plot_roc_cv(scores["test_predict_proba"], X, y, scores["test_inds"], 
+                    label=clf_name, show_chance=False, ax=axs[0])
+
+    axs[0].set(xlabel="False Positive Rate", ylabel="True Positive Rate", 
+            xlim=[-0.05, 1.05], ylim=[-0.05, 1.05],
+            title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)")
+    axs[0].legend(loc="lower right")
+
+    # 2. Plot accuracies
     plot_accuracies(clf_scores, ax=axs[1])
-    axs[1].set(
-        ylabel="accuracy",
-        title=f"{subject.upper()}: Accuracy of Classifiers ('At Center' vs. 'Left Target', {domain.capitalize()} Domain)",
-    )
+    axs[1].set(ylabel="accuracy", title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)")
     fig.tight_layout()
+
     plt.savefig(destination / f"movement_onset_{domain}_domain.png")
     plt.close(fig)
     print(f"Figure saved at {destination}/movement_onset_{domain}_domain.png")
@@ -824,12 +717,12 @@ def baseline_experiment(bids_path, destination_path, random_state=None):
     ## Apply baseline
     baseline = read_dataset(
         bids_path,
-        kind="ieeg", 
-        tmin=0.0, 
+        kind="ieeg",
+        tmin=0.0,
         # tmax=2.0,
-        tmax=1.25, 
-        picks=None, 
-        event_key="At Center"
+        tmax=1.25,
+        picks=None,
+        event_key="At Center",
     )
     baseline.load_data()
 
@@ -1087,7 +980,6 @@ def frequency_band_comparison(epochs, destination_path, random_state=None):
             return_estimator=True,
         )
 
-
     fig, axs = plt.subplots(ncols=2, figsize=(22, 6), dpi=100)
     axs = axs.flatten()
 
@@ -1095,9 +987,11 @@ def frequency_band_comparison(epochs, destination_path, random_state=None):
     id_col = pd.Series(range(1, n_splits + 1))
     accuracies = {name: score["test_accuracy"] for name, score in scores.items()}
     accuracies["ID"] = id_col
-    
+
     df = pd.DataFrame(accuracies)
-    idx = [list(scores.keys())[-1]] + list(scores.keys())[:-1]  # Re-order so that control is hi-gamma band
+    idx = [list(scores.keys())[-1]] + list(scores.keys())[
+        :-1
+    ]  # Re-order so that control is hi-gamma band
     my_data = dabest.load(df, idx=idx, resamples=100, random_seed=rng)
     my_data.mean_diff.plot(ax=axs[0])
     axs[0].set(title=f"{subject.upper()} Accuracy Comparison between Frequency Bands")
@@ -1111,7 +1005,9 @@ def frequency_band_comparison(epochs, destination_path, random_state=None):
     axs[1].set(title=f"{subject.upper()} ROC AUC Comparison between Frequency Bands")
 
     fig.tight_layout()
-    plt.savefig(destination / f"{subject}_frequency_band_comparison_tmin=-0.5_tmax=1.0.png")
+    plt.savefig(
+        destination / f"{subject}_frequency_band_comparison_tmin=-0.5_tmax=1.0.png"
+    )
     plt.close(fig)
 
 
@@ -1261,27 +1157,23 @@ if __name__ == "__main__":
 
     elif experiment == "frequency_bands":
         epochs.crop(tmin=-0.5, tmax=1.0)
-        frequency_band_comparison(
-            epochs, 
-            results_path / subject, 
-            random_state=rng
-        )
+        frequency_band_comparison(epochs, results_path / subject, random_state=rng)
 
     elif experiment == "plot_event_durations":
         subjects = [
-            "efri02", 
-            "efri06", 
-            "efri07", 
+            "efri02",
+            "efri06",
+            "efri07",
             # "efri09",  # Too few samples
             # "efri10",  # Unequal data size vs label size
-            "efri13", 
-            "efri14", 
-            "efri15", 
-            "efri18", 
-            "efri20", 
-            "efri26", 
+            "efri13",
+            "efri14",
+            "efri15",
+            "efri18",
+            "efri20",
+            "efri26",
         ]
-        
+
         fig, axs = plt.subplots(nrows=3, ncols=3, dpi=300, figsize=(18, 18))
         axs = axs.flatten()
 
@@ -1301,7 +1193,7 @@ if __name__ == "__main__":
 
             behav, events = map(pd.DataFrame, get_trial_info(bids_path))
             plot_event_durations(behav, events, ax=ax, random_state=rng)
-            
+
             ax.set(
                 ylabel='Onset Relative to "Go Cue" (s)',
                 title=f"{subject.upper()}: Onset of Events",
@@ -1313,27 +1205,26 @@ if __name__ == "__main__":
 
         # behav, events = map(pd.DataFrame, get_trial_info(bids_path))
         # plot_event_durations(behav, events, ax=ax, random_state=rng)
-        
+
         # ax.set(ylabel="duration (s)", title=f"{subject.upper()}: Duration of Events")
         # fig.tight_layout()
         # plt.savefig(results_path / subject / f"{subject}_event_durations.png")
 
-
     elif experiment == "plot_event_onsets":
         subjects = [
-            "efri02", 
-            "efri06", 
-            "efri07", 
+            "efri02",
+            "efri06",
+            "efri07",
             # "efri09",  # Too few samples
             # "efri10",  # Unequal data size vs label size
-            "efri13", 
-            "efri14", 
-            "efri15", 
-            "efri18", 
-            "efri20", 
-            "efri26", 
+            "efri13",
+            "efri14",
+            "efri15",
+            "efri18",
+            "efri20",
+            "efri26",
         ]
-        
+
         fig, axs = plt.subplots(nrows=3, ncols=3, dpi=300, figsize=(18, 18))
         axs = axs.flatten()
 
@@ -1353,7 +1244,7 @@ if __name__ == "__main__":
 
             behav, events = map(pd.DataFrame, get_trial_info(bids_path))
             plot_event_onsets(behav, events, ax=ax, random_state=rng)
-            
+
             ax.set(
                 ylabel='Onset Relative to "Go Cue" (s)',
                 title=f"{subject.upper()}: Onset of Events",
@@ -1364,7 +1255,7 @@ if __name__ == "__main__":
 
         # behav, events = map(pd.DataFrame, get_trial_info(bids_path))
         # plot_event_onsets(behav, events, ax=ax, random_state=rng)
-        
+
         # ax.set(
         #     ylabel='Onset Relative to "Go Cue" (s)',
         #     title=f"{subject.upper()}: Onset of Events",

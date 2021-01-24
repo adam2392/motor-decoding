@@ -23,10 +23,7 @@ from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, roc_curve
 from sklearn.model_selection import cross_validate
 
-try:
-    from rerf.rerfClassifier import rerfClassifier
-except ModuleNotFoundError:
-    print("rerf could not be imported.")
+from rerf.rerfClassifier import rerfClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +35,14 @@ class NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def _generate_linspace_roc_from_dict(fpr_arr: List, tpr_arr: List, n_points: int=100):
+def _generate_linspace_roc_from_dict(fpr_arr: List, tpr_arr: List, n_points: int = 100):
     """Generate mean FPR and TPR curves from many ROC CV curves."""
     if len(fpr_arr) != len(tpr_arr):
-        raise RuntimeError("Number of iterations through ROC curve should "
-                           "be the same (i.e. fpr_arr and tpr_arr should have "
-                           "the same length).")
+        raise RuntimeError(
+            "Number of iterations through ROC curve should "
+            "be the same (i.e. fpr_arr and tpr_arr should have "
+            "the same length)."
+        )
 
     # create a list to store the interpolated TPRs
     tprs = []
@@ -64,31 +63,45 @@ def _generate_linspace_roc_from_dict(fpr_arr: List, tpr_arr: List, n_points: int
     # compute std tpr
     std_tpr = np.nanstd(tprs, axis=0)
 
-    return mean_fpr, mean_tpr,  std_tpr
+    return mean_fpr, mean_tpr, std_tpr
 
 
-def _plot_roc_curve(mean_tpr, mean_fpr, std_tpr=None,
-                    mean_auc=None, std_auc=None, ax=None):
+def _plot_roc_curve(
+    mean_tpr, mean_fpr, std_tpr=None, mean_auc=None, std_auc=None, ax=None
+):
     import matplotlib.pyplot as plt
 
     if ax is None:
         fig, ax = plt.subplots(1, 1)
 
     # plot the actual curve
-    ax.plot(mean_fpr, mean_tpr, color='b',
-            label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
-            lw=2, alpha=.8)
+    ax.plot(
+        mean_fpr,
+        mean_tpr,
+        color="b",
+        label=r"Mean ROC (AUC = %0.2f $\pm$ %0.2f)" % (mean_auc, std_auc),
+        lw=2,
+        alpha=0.8,
+    )
 
     # get upper and lower bound for tpr
     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-    ax.fill_between(mean_fpr, tprs_lower, tprs_upper,
-                    color='grey', alpha=.2,
-                    label=r'$\pm$ 1 std. dev.')
+    ax.fill_between(
+        mean_fpr,
+        tprs_lower,
+        tprs_upper,
+        color="grey",
+        alpha=0.2,
+        label=r"$\pm$ 1 std. dev.",
+    )
 
     # increase axis limits to see edges
-    ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05],
-           title="Receiver operating characteristic curve")
+    ax.set(
+        xlim=[-0.05, 1.05],
+        ylim=[-0.05, 1.05],
+        title="Receiver operating characteristic curve",
+    )
     ax.legend(loc="lower right")
     return ax
 
@@ -202,4 +215,3 @@ def append_original_fname_to_scans(
 
     # write the scans out
     _to_tsv(scans_tsv, scans_fpath)
-    

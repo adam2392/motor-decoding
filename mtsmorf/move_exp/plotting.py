@@ -24,6 +24,7 @@ colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
 # colors = cycle([['EE7733', '0077BB', '33BBEE', 'EE3377', 'CC3311', '009988', 'BBBBBB']])
 
 plt.style.use(["science", "ieee", "no-latex"])
+plt.rcParams["font.family"] = "sans-serif"
 
 
 def plot_event_durations(behav, events, jitter=0.025, ax=None, random_state=None):
@@ -402,7 +403,7 @@ def plot_feature_importances(
     return ax
 
 
-def plot_roc_cv(y_pred_probas, X, y, test_inds, ax=None):
+def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None):
 
     if ax is None:
         ax = plt.gca()
@@ -476,7 +477,7 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, ax=None):
     ax.plot(
         mean_fpr,
         mean_tpr,
-        label=r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+        label=label + r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
             mean_auc=mean_auc, std_auc=std_auc
         ),
         ls="-",
@@ -492,7 +493,8 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, ax=None):
         alpha=0.1,
     )
 
-    ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.8)
+    if show_chance:
+        ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.8)
 
     return ax
 

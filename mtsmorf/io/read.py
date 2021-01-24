@@ -1,5 +1,6 @@
 import json
 import sys
+from collections import OrderedDict
 from pprint import pprint
 from pathlib import Path
 
@@ -39,9 +40,6 @@ def get_trial_info(bids_path):
 
 
 def _read_ch_anat(bids_path):
-    # electrodes_fpath = _find_matching_sidecar(
-    #     bids_basename, bids_root, suffix="electrodes.tsv"
-    # )
     electrodes_fpath = _find_matching_sidecar(
         bids_path, suffix="channels", extension=".tsv"
     )
@@ -64,7 +62,7 @@ def _get_maximum_trial_length(events_tsv):
 
 
 def _get_trial_length_by_kwarg(
-        events_tsv, start_trial_type, stop_trial_type, successful_trials
+    events_tsv, start_trial_type, stop_trial_type, successful_trials
 ):
     start_trial_inds = [
         i
@@ -110,8 +108,8 @@ def _get_bad_chs(bids_path):
     bads = []
     for ch_name, anat in ch_anat_dict.items():
         if (
-                anat in ["out", "white matter", "cerebrospinal fluid"]
-                or "ventricle" in anat
+            anat in ["out", "white matter", "cerebrospinal fluid"]
+            or "ventricle" in anat
         ):
             bads.append(ch_name)
     return bads
@@ -127,44 +125,44 @@ def read_trial(bids_path, trial_id, picks=None):
     if picks is None:
         good_chs = [ch for ch in raw.ch_names if ch not in raw.info["bads"]]
     else:
-        good_chs = [ch for ch in raw.ch_names if ch in picks and ch not in raw.info["bads"]]
+        good_chs = [
+            ch for ch in raw.ch_names if ch in picks and ch not in raw.info["bads"]
+        ]
 
     # get trial information
-    behav_tsv, events_tsv = get_trial_info(bids_path)
+    behav, events = map(pd.DataFrame, get_trial_info(bids_path))
+    behav[["trial_id", "successful_trial_flag"]] = behav[
+        ["trial_id", "successful_trial_flag"]
+    ].apply(pd.to_numeric)
+    events["sample"] = pd.to_numeric(events["sample"])
 
-    # trial_info from behav tsv
-    behav_trial_ind = behav_tsv["trial_id"].index(str(trial_id))
-    trial_metadata = dict()
-    for key, values in behav_tsv.items():
-        trial_metadata[key] = values[behav_trial_ind]
+    # collect all rows with trial_type of "start trial" or "end trial"
+    start_trial_events = events[events.trial_type == "Reserved (Start Trial)"]
+    end_trial_events = events[events.trial_type == "Reserved (End Trial)"]
 
-    # get trial events
-    start_trial_inds = [
-        i
-        for i, x in enumerate(events_tsv["trial_type"])
-        if x == "Reserved (Start Trial)"
+    # number of trials should match
+    assert len(start_trial_events) == len(end_trial_events)
+    assert len(start_trial_events) == len(behav.trial_id)
+
+    # get "start trial" row and "end trial" row for specified trial_id
+    trial_metadata = behav[behav.trial_id == trial_id]
+
+    if len(trial_metadata) < 1:
+        raise ValueError(f"Did not find info for given trial_id {trial_id}.")
+
+    trial_ind = trial_metadata.index
+    start_trial_event = start_trial_events.iloc[trial_ind]
+    end_trial_event = end_trial_events.iloc[trial_ind]
+
+    # get all the events for specified trial_id and convert to OrderedDict
+    trial_events = events.iloc[
+        start_trial_event.index[0] : end_trial_event.index[0] + 1
     ]
-    end_trial_inds = [
-        i for i, x in enumerate(events_tsv["trial_type"]) if x == "Reserved (End Trial)"
-    ]
-    assert len(start_trial_inds) == len(
-        behav_tsv["trial_id"]
-    )  # number of trials should match
+    events_tsv = trial_events.to_dict(orient="list", into=OrderedDict)
 
-    # get the rows of the start/end of the trial
-    event_trialstart_ind = start_trial_inds[behav_trial_ind]
-    event_trialend_ind = end_trial_inds[behav_trial_ind]
-
-    # trim raw to between those
-    start = int(events_tsv["sample"][event_trialstart_ind])
-    stop = int(events_tsv["sample"][event_trialend_ind])
-
-    _events_tsv = dict()
-    for key, values in events_tsv.items():
-        _events_tsv[key] = [
-            values[i] for i in range(event_trialstart_ind, event_trialend_ind + 1)
-        ]
-    events_tsv = _events_tsv
+    # get start and stop sampling indices of specified trial
+    start = start_trial_event["sample"].iloc[0]
+    stop = end_trial_event["sample"].iloc[0]
 
     # load the data for this trial
     rawdata, times = raw.get_data(
@@ -177,85 +175,85 @@ def read_trial(bids_path, trial_id, picks=None):
 def read_label(bids_path, trial_id=None, label_keyword="bet_amount"):
     """Read trial's label"""
     # get trial information
-    behav_tsv, events_tsv = get_trial_info(bids_path)
-    trial_ids = behav_tsv["trial_id"]
+    behav_tsv, _ = get_trial_info(bids_path)
+    behav = pd.DataFrame(behav_tsv)
+    behav[["trial_id", "successful_trial_flag"]] = behav[
+        ["trial_id", "successful_trial_flag"]
+    ].apply(pd.to_numeric)
 
-    # return all trials
+    trial_ids = behav.trial_id
+    trial_id = None
+    label_keyword = "target_direction"
+
     if trial_id is not None:
-        # trial_info from behav tsv
-        behav_trial_ind = trial_ids.index(int(trial_id))
-        trial_metadata = dict()
-        for key, values in behav_tsv.items():
-            trial_metadata[key] = values[behav_trial_ind]
-
+        # info for specified trial_id from behav tsv
+        trial_metadata = behav[behav.trial_id == trial_id]
         y = trial_metadata[label_keyword]
     else:
-        y = behav_tsv[label_keyword]
+        # info for all trials from behav tsv
+        y = behav[label_keyword]
 
-    success_trial_flag = np.array(list(map(int, behav_tsv["successful_trial_flag"])))
     # successful trial indices
-    successful_trial_inds = np.where(success_trial_flag == 1)[0]
+    successful_trial_inds = behav.successful_trial_flag == 1
 
-    y = np.array(y).astype(float)
     y = y[successful_trial_inds]
+    y = np.array(y).astype(float)
 
-    trial_ids = np.array(trial_ids).astype(int)
     trial_ids = trial_ids[successful_trial_inds]
+    trial_ids = np.array(trial_ids).astype(int)
 
     return y, trial_ids
 
 
-def read_dataset(bids_path, kind='ieeg', tmin=-0.25, tmax=0.5, picks=None, event_key="show card", n_jobs=1, notch_filter=False, verbose=True):
+def read_dataset(
+    bids_path,
+    kind="ieeg",
+    tmin=-0.2,
+    tmax=0.5,
+    event_key="show card",
+    notch_filter=True,
+    verbose=True,
+):
     """Read entire dataset as an Epoch."""
 
     # read in the dataset from mnebids
     raw = read_raw_bids(bids_path)
 
-    # get trial information
-    behav_tsv, events_tsv = get_trial_info(bids_path)
-
-    # get bad channels
+    # append bad channels
     bads = _get_bad_chs(bids_path)
     raw.info["bads"].extend(bads)
-    if (picks is None) or (len(picks) == 0):
-        good_chs = [ch for ch in raw.ch_names if ch not in raw.info["bads"]]
-    else:
-        good_chs = [ch for ch in raw.ch_names if ch in picks and ch not in raw.info["bads"]]
 
     # only keep SEEG chs
-    # if mne.__version__ != '0.21.dev0':
-    #     raw.load_data()
     raw = raw.pick_types(meg=False, seeg=True)
-    
-    if notch_filter is True:
-        raw.load_data(verbose="DEBUG")
-        fs = raw.info['sfreq']
-        raw = raw.notch_filter(np.arange(60, fs/2, 60))
+
+    # filter 60 Hz and harmonics
+    raw.load_data()
+    fs = raw.info["sfreq"]
+    raw = raw.notch_filter(np.arange(60, fs / 2, 60))
 
     # get the events and events id structure
     events, event_id = mne.events_from_annotations(raw, verbose=verbose)
-    # event_id = event_id['Reserved (Start Trial)']  # time lock to the event id for Start Trial
     event_id = event_id[event_key]  # Change time locked event
 
-    success_trial_flag = np.array(list(map(int, behav_tsv["successful_trial_flag"])))
-    # successful trial indices
-    successful_trial_inds = np.where(success_trial_flag == 1)[0]
-
-    # print(len(successful_trial_inds))
-    # print(successful_trial_inds)
-    # tmax = _get_trial_length_by_kwarg(
-    #     events_tsv, start_trial_type="show card", stop_trial_type="show card results", successful_trials=successful_trial_inds
-    # )
-
     # get the epochs
-    epochs = mne.Epochs(raw, events, event_id, baseline=None,
-                        tmin=tmin, tmax=tmax, picks=good_chs,
-                        verbose=verbose)
-        
+    epochs = mne.Epochs(
+        raw, events, event_id, tmin=tmin, tmax=tmax, baseline=None, verbose=verbose
+    )
+
     return epochs
 
 
-def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=False, n_splits=10, seed=1234):
+def cv_fit(
+    clf,
+    X,
+    y,
+    num_trials=1,
+    apply_grid=False,
+    cv_type="KFold",
+    shuffle=False,
+    n_splits=10,
+    seed=1234,
+):
     """Cross-validation experiments.
 
     Allows:
@@ -287,19 +285,22 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
     """
     import matplotlib.pyplot as plt
     from sklearn.metrics import roc_curve
-    from sklearn.model_selection import (KFold, StratifiedKFold,
-                                         train_test_split,
-                                         TimeSeriesSplit)
-    from sklearn.model_selection import (cross_val_score, RandomizedSearchCV)
+    from sklearn.model_selection import (
+        KFold,
+        StratifiedKFold,
+        train_test_split,
+        TimeSeriesSplit,
+    )
+    from sklearn.model_selection import cross_val_score, RandomizedSearchCV
 
     # seed things
     np.random.seed(seed)
 
-    if cv_type == 'KFold':
+    if cv_type == "KFold":
         cv_func = KFold
-    elif cv_type == 'StratifiedKFold':
+    elif cv_type == "StratifiedKFold":
         cv_func = StratifiedKFold
-    elif cv_type == 'TimeSeriesSplit':
+    elif cv_type == "TimeSeriesSplit":
         cv_func = TimeSeriesSplit
     else:
         cv_func = train_test_split
@@ -309,7 +310,7 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
     if len(groups) < len(y):
         groups = np.concatenate((groups, np.tile(groups[-1], (len(y) - len(groups)))))
 
-    ''' Perform CV both nested and non-nested.'''
+    """ Perform CV both nested and non-nested."""
     # Arrays to store scores
     non_nested_scores = np.zeros(num_trials)
     nested_scores = np.zeros(num_trials)
@@ -319,7 +320,7 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
         # Number of trees in random forest
         n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=5)]
         # Number of features to consider at every split
-        max_features = ['auto', 'sqrt', 'log2']
+        max_features = ["auto", "sqrt", "log2"]
 
         # Maximum number of levels in tree
         max_depth = [int(x) for x in np.linspace(10, 110, num=5)]
@@ -338,7 +339,7 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
         n_iter = 100
     else:
         n_estimators = [200]
-        max_features = ['auto']
+        max_features = ["auto"]
         max_depth = [None]
         min_samples_split = [2]
 
@@ -351,15 +352,16 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
         # number of iterations to RandomSearchCV
         n_iter = 1
 
-    random_grid = {'n_estimators': n_estimators,
-                   'max_features': max_features,
-                   'max_depth': max_depth,
-                   'min_samples_split': min_samples_split,
-                   # 'patch_height_min': patch_height_min,
-                   # 'patch_width_min': patch_width_min,
-                   # 'patch_height_max': patch_height_max,
-                   # 'patch_width_max': patch_width_max,
-                   }
+    random_grid = {
+        "n_estimators": n_estimators,
+        "max_features": max_features,
+        "max_depth": max_depth,
+        "min_samples_split": min_samples_split,
+        # 'patch_height_min': patch_height_min,
+        # 'patch_width_min': patch_width_min,
+        # 'patch_height_max': patch_height_max,
+        # 'patch_width_max': patch_width_max,
+    }
     pprint(random_grid)
 
     # loop over number of trials
@@ -367,20 +369,19 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
         # Choose cross-validation techniques for the inner and outer loops,
         # independently of the dataset.
         # E.g "GroupKFold", "LeaveOneOut", "LeaveOneGroupOut", etc.
-        inner_cv = cv_func(n_splits=n_splits,
-                           shuffle=shuffle,
-                           random_state=seed)
-        outer_cv = cv_func(n_splits=n_splits,
-                           shuffle=shuffle,
-                           random_state=seed)
+        inner_cv = cv_func(n_splits=n_splits, shuffle=shuffle, random_state=seed)
+        outer_cv = cv_func(n_splits=n_splits, shuffle=shuffle, random_state=seed)
 
         # Non_nested parameter search and scoring
         # clf = GridSearchCV(estimator=clf, param_grid=random_grid, cv=inner_cv)
-        cv_clf = RandomizedSearchCV(estimator=clf,
-                                    param_distributions=random_grid,
-                                    n_iter=n_iter,
-                                    cv=inner_cv, verbose=1,
-                                    n_jobs=-1)
+        cv_clf = RandomizedSearchCV(
+            estimator=clf,
+            param_distributions=random_grid,
+            n_iter=n_iter,
+            cv=inner_cv,
+            verbose=1,
+            n_jobs=-1,
+        )
         print(X.shape, y.shape, groups.shape)
         cv_clf.fit(X, y, groups=groups)
         non_nested_scores[itrial] = cv_clf.best_score_
@@ -400,9 +401,11 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
             # print(ytest)
 
             # compute the curve and AUC
-            fpr[i], tpr[i], thresholds[i] = roc_curve(y_true=ytest,
-                                                      # pos_label=1,
-                                                      y_score=ypredict_proba)
+            fpr[i], tpr[i], thresholds[i] = roc_curve(
+                y_true=ytest,
+                # pos_label=1,
+                y_score=ypredict_proba,
+            )
             aucs[i] = roc_curve(y_true=ytest, y_score=ypredict_proba)
             test_inds[i] = test
 
@@ -414,58 +417,78 @@ def cv_fit(clf, X, y, num_trials=1, apply_grid=False, cv_type='KFold', shuffle=F
         #                                    n_jobs=-1, verbose=1, method='predict_proba')
 
         # save files
-        fpath = f'./{itrial}trial_metrics_roc.json'
-        with open(fpath, mode='w') as fout:
-            json.dump({'test_inds': test_inds,
-                       'tpr': tpr,
-                       'fpr': fpr,
-                       'thresholds': thresholds},
-                      fout, cls=NumpyEncoder)
+        fpath = f"./{itrial}trial_metrics_roc.json"
+        with open(fpath, mode="w") as fout:
+            json.dump(
+                {
+                    "test_inds": test_inds,
+                    "tpr": tpr,
+                    "fpr": fpr,
+                    "thresholds": thresholds,
+                },
+                fout,
+                cls=NumpyEncoder,
+            )
 
-        roc_df = pd.DataFrame([tpr, fpr, thresholds],
-                              columns=['tpr', 'fpr', 'thresholds'])
+        roc_df = pd.DataFrame(
+            [tpr, fpr, thresholds], columns=["tpr", "fpr", "thresholds"]
+        )
         print(roc_df)
 
     # show the differences between nested/non-nested
     score_difference = non_nested_scores - nested_scores
-    print("Average difference of {:6f} with std. dev. of {:6f}."
-          .format(score_difference.mean(), score_difference.std()))
+    print(
+        "Average difference of {:6f} with std. dev. of {:6f}.".format(
+            score_difference.mean(), score_difference.std()
+        )
+    )
 
     # Plot scores on each trial for nested and non-nested CV
     # can comment out if you don't need
     if num_trials > 1:
         plt.figure()
         plt.subplot(211)
-        non_nested_scores_line, = plt.plot(non_nested_scores, color='r')
-        nested_line, = plt.plot(nested_scores, color='b')
+        (non_nested_scores_line,) = plt.plot(non_nested_scores, color="r")
+        (nested_line,) = plt.plot(nested_scores, color="b")
         plt.ylabel("score", fontsize="14")
-        plt.legend([non_nested_scores_line, nested_line],
-                   ["Non-Nested CV", "Nested CV"],
-                   bbox_to_anchor=(0, .4, .5, 0))
-        plt.title("Non-Nested and Nested Cross Validation on Iris Dataset",
-                  x=.5, y=1.1, fontsize="15")
+        plt.legend(
+            [non_nested_scores_line, nested_line],
+            ["Non-Nested CV", "Nested CV"],
+            bbox_to_anchor=(0, 0.4, 0.5, 0),
+        )
+        plt.title(
+            "Non-Nested and Nested Cross Validation on Iris Dataset",
+            x=0.5,
+            y=1.1,
+            fontsize="15",
+        )
 
         # Plot bar chart of the difference.
         plt.subplot(212)
         difference_plot = plt.bar(range(num_trials), score_difference)
         plt.xlabel("Individual Trial #")
-        plt.legend([difference_plot],
-                   ["Non-Nested CV - Nested CV Score"],
-                   bbox_to_anchor=(0, 1, .8, 0))
+        plt.legend(
+            [difference_plot],
+            ["Non-Nested CV - Nested CV Score"],
+            bbox_to_anchor=(0, 1, 0.8, 0),
+        )
         plt.ylabel("score difference", fontsize="14")
         plt.show()
 
     # save results
     # ReRF probably can't get pickled I believe.
     try:
-        joblib.dump(cv_clf.best_estimator_, f'./train_{num_trials}trials_{cv_type}.pkl',
-                    compress=1)
+        joblib.dump(
+            cv_clf.best_estimator_,
+            f"./train_{num_trials}trials_{cv_type}.pkl",
+            compress=1,
+        )
     except Exception as e:
         print(e)
 
     print(cv_clf.best_params_)
     # at the very least save the best parameters as a json
-    with open(f'./train_{num_trials}trials_{cv_type}.json', 'w') as fout:
+    with open(f"./train_{num_trials}trials_{cv_type}.json", "w") as fout:
         json.dump(cv_clf.best_params_, fout)
 
     return cv_clf
@@ -479,6 +502,7 @@ def run_exp(epochs_data, y):
     print("'Image' parameters of the multivariate TS raw data: ")
     print(f"{image_height} X {image_width}")
     from sklearn.ensemble import RandomForestClassifier
+
     clf = RandomForestClassifier()
 
     # make sure y labels are properly binarized
@@ -486,8 +510,9 @@ def run_exp(epochs_data, y):
     y = lb.fit_transform(y)
     print(y)
 
-    cv_clf = cv_fit(clf, X, y, num_trials=1,
-                    cv_type='KFold', shuffle=False, n_splits=2, seed=1234)
+    cv_clf = cv_fit(
+        clf, X, y, num_trials=1, cv_type="KFold", shuffle=False, n_splits=2, seed=1234
+    )
 
 
 if __name__ == "__main__":
@@ -525,9 +550,7 @@ if __name__ == "__main__":
     rawdata, times, events_tsv = read_trial(bids_path, trial_id)
 
     # get the label of this trial
-    y, trial_ids = read_label(
-        bids_path, trial_id=None, label_keyword="bet_amount"
-    )
+    y, trial_ids = read_label(bids_path, trial_id=None, label_keyword="bet_amount")
     unsuccessful_trial_inds = np.where(np.isnan(y))[
         0
     ]  # get unsuccessful trials based on keyword label
