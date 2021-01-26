@@ -211,7 +211,6 @@ def read_dataset(
     tmin=-0.2,
     tmax=0.5,
     event_key="show card",
-    notch_filter=True,
     verbose=True,
 ):
     """Read entire dataset as an Epoch."""

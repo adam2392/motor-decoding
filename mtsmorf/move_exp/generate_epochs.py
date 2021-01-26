@@ -15,6 +15,8 @@ sys.path.append(str(Path(__file__).parent.parent / "io"))
 sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
 
 from read import read_dataset, read_label, read_trial, get_trial_info
+
+from experiment_functions import preprocess_epochs
 from plotting import (
     plot_signals,
     plot_roc_multiclass_cv,
@@ -49,8 +51,6 @@ if __name__ == "__main__":
     # bids_root = Path("/home/adam2392/hdd/Dropbox/efri/")
     # results_path = bids_root / "derivatives" / "raw" / "mtsmorf" / "results"
 
-    ###### Some participants in the following list do not have MOVE data
-    
     with open(Path(os.path.dirname(__file__)) / "metadata.yml") as f:
         metadata = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -73,24 +73,15 @@ if __name__ == "__main__":
         bids_path = BIDSPath(**path_identifiers)
 
         # get EEG data
-        picks = []
         epochs = read_dataset(
             bids_path,
             tmin=tmin,
             tmax=tmax,
-            picks=picks,
             event_key="Left Target",
             notch_filter=True,
         )
         epochs.load_data()
-
-        # Low-pass filter up to sfreq/2
-        fs = epochs.info["sfreq"]
-        epochs = epochs.filter(l_freq=1, h_freq=fs / 2 - 1)
-
-        # Downsample epochs to 500 Hz
-        resample_rate = 500
-        epochs = epochs.resample(resample_rate)
+        epochs = preprocess_epochs(epochs)
 
         if not os.path.exists(derivatives_path / subject):
             os.makedirs(derivatives_path / subject)

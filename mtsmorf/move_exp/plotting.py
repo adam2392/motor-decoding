@@ -605,3 +605,31 @@ def plot_roc_aucs(clf_scores, ax=None):
     )
 
     return ax
+
+
+def plot_classifier_performance(clf_scores, X, y, axs=None):
+
+    if axs is None:
+        axs = plt.subplots(ncols=2)
+
+    if len(axs) != 2:
+        raise ValueError("Axes to be plotted to should have exactly 2 subplots.")
+    
+    axs = axs.flatten()
+    
+    # 1. Plot roc curves
+    for clf_name, scores in clf_scores.items():
+        plot_roc_cv(
+            scores["test_predict_proba"],
+            X,
+            y,
+            scores["test_inds"],
+            label=clf_name,
+            show_chance=False,
+            ax=axs[0],
+        )
+
+    # 2. Plot accuracies
+    plot_accuracies(clf_scores, ax=axs[1])
+
+    return axs

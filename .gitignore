@@ -1,2 +1,5 @@
 results/
 .devcontainer/
+.vscode/
+
+*config.yml
