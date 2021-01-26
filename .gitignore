@@ -2,4 +2,6 @@ results/
 .devcontainer/
 .vscode/
 
-*config.yml
+# *config.yml
+
+*.DS_Store
