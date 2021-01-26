@@ -1,26 +1,42 @@
+import argparse
 import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from mne.time_frequency.tfr import tfr_morlet
-
-from ..cv import cv_fit
-from ..move_experiment_functions import get_event_data, initialize_classifiers
-from ..plotting import plot_classifier_performance
-from mne_bids.path import BIDSPath
-import argparse
 import yaml
+
+from mne_bids.path import BIDSPath
+from mne.time_frequency.tfr import tfr_morlet
+from sklearn.metrics import cohen_kappa_score, make_scorer
+from sklearn.model_selection import StratifiedKFold
+
+from cv import cv_fit
+from move_experiment_functions import get_event_data, initialize_classifiers
+from plotting import plot_classifier_performance
+
+
+def _get_classifier_name(clf):
+    """Get the classifier name based on class type."""
+    if clf.__class__.__name__ == "rerfClassifier":
+        clf_name = clf.get_params()["projection_matrix"]
+    elif clf.__class__.__name__ == "DummyClassifier":
+        clf_name = clf.strategy
+    else:
+        clf_name = clf.__class__.__name__
+
+    return clf_name
 
 
 def _prepare_onset_data(before, after, domain):
-
+    """Extract data matrix X and labels y from before and after mne.Epochs
+    data structures.
+    """
     before.load_data()
-    before_data = before.data
+    before_data = before.get_data()
 
     after.load_data()
-    after_data = after.data
+    after_data = after.get_data()
 
     if domain.lower() == "time":
         ## Time Domain
@@ -36,7 +52,7 @@ def _prepare_onset_data(before, after, domain):
         image_height = nchs
         image_width = nsteps
 
-    elif domain.lower() == "frequency":
+    elif domain.lower() in ["freq", "frequency"]:
         ## Freq Domain
         nfreqs = 10
         lfreq, hfreq = (70, 200)
@@ -89,7 +105,7 @@ def movement_onset_experiment(
     domain,
     random_state=None,
 ):
-    """docstring"""
+    """Run classifier comparison in classifying before or after movement onset."""
     subject = bids_path.subject
     destination = Path(destination_path) / "movement_onset_experiment"
 
@@ -113,13 +129,7 @@ def movement_onset_experiment(
     )
 
     for clf in clfs:
-        if clf.__class__.__name__ == "rerfClassifier":
-            clf_name = clf.get_params()["projection_matrix"]
-        elif clf.__class__.__name__ == "DummyClassifier":
-            clf_name = clf.strategy
-        else:
-            clf_name = clf.__class__.__name__
-
+        clf_name = _get_classifier_name(clf)
         clf_scores[clf_name] = cv_fit(
             clf,
             X,
@@ -171,15 +181,6 @@ if __name__ == "__main__":
 
     bids_root = Path(config["bids_root"])
     results_path = Path(config["results_path"])
-
-    seed = 1
-
-    metrics = dict(
-        accuracy="accuracy",
-        cohen_kappa_score=make_scorer(cohen_kappa_score),
-        roc_auc_ovr="roc_auc_ovr",
-    )
-
     path_identifiers = dict(
         subject=subject,
         session="efri",
@@ -190,18 +191,21 @@ if __name__ == "__main__":
         extension=".vhdr",
         root=bids_root,
     )
+    bids_path = BIDSPath(**path_identifiers)
 
-    bids_path = BIDSPath()
-
-    movement_onset_experiment(
-        bids_path, results_path / subject, cv, metrics, domain="time", random_state=seed
+    seed = 1
+    metrics = dict(
+        accuracy="accuracy",
+        cohen_kappa_score=make_scorer(cohen_kappa_score),
+        roc_auc_ovr="roc_auc_ovr",
     )
+    n_splits = 5
+    cv = StratifiedKFold(n_splits)
 
+    destination_path = results_path / subject
     movement_onset_experiment(
-        bids_path,
-        results_path / subject,
-        cv,
-        metrics,
-        domain="frequency",
-        random_state=seed,
+        bids_path, destination_path, cv, metrics, domain="time", random_state=seed
+    )
+    movement_onset_experiment(
+        bids_path, destination_path, cv, metrics, domain="freq", random_state=seed
     )

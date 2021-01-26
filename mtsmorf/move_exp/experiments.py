@@ -20,9 +20,13 @@ from sklearn.metrics import cohen_kappa_score, confusion_matrix, make_scorer, ro
 from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklearn.utils import check_random_state
 
-from ..cv import cv_roc, cv_fit
-from ..move_experiment_functions import get_event_data, initialize_classifiers
-from ..plotting import (
+from cv import cv_roc, cv_fit
+from move_experiment_functions import (
+    get_event_data,
+    initialize_classifiers,
+    fit_classifiers_cv,
+)
+from plotting import (
     plot_roc_cv,
     plot_accuracies,
     plot_roc_aucs,
@@ -113,29 +117,9 @@ def run_classifier_comparison(
     X = data[included_trials].reshape(np.sum(included_trials), -1)
     y = labels[included_trials]
 
-    clf_scores = dict()
-    clfs = initialize_classifiers(
-        image_height, image_width, n_jobs=-1, random_state=random_state
+    clf_scores = fit_classifiers_cv(
+        X, y, image_height, image_width, cv, metrics, random_state=random_state
     )
-
-    for clf in clfs:
-        if clf.__class__.__name__ == "rerfClassifier":
-            clf_name = clf.get_params()["projection_matrix"]
-        elif clf.__class__.__name__ == "DummyClassifier":
-            clf_name = clf.strategy
-        else:
-            clf_name = clf.__class__.__name__
-
-        clf_scores[clf_name] = cv_fit(
-            clf,
-            X,
-            y,
-            cv=cv,
-            metrics=metrics,
-            n_jobs=None,
-            return_train_score=True,
-            return_estimator=True,
-        )
 
     return clf_scores
 
@@ -144,8 +128,8 @@ def shuffle_channels_experiment(
     bids_path,
     cv,
     destination_path,
-    tmin=tmin,
-    tmax=tmax,
+    tmin=-0.2,
+    tmax=0.5,
     nfreqs=10,
     lfreq=70,
     hfreq=200,
@@ -265,72 +249,6 @@ def shuffle_channels_experiment(
     fig.tight_layout()
     plt.savefig(destination / "freq_domain_no_averaging_comparison.png")
     plt.close(fig)
-
-
-def movement_onset_experiment(
-    bids_path,
-    destination_path,
-    cv,
-    metrics,
-    domain,
-    random_state=None,
-):
-    """docstring"""
-    subject = bids_path.subject
-    destination = Path(destination_path) / "movement_onset_experiment"
-
-    if not os.path.exists(destination):
-        os.makedirs(destination)
-
-    before, _ = get_event_data(bids_path, tmin=0, tmax=1.0, event_key="At Center")
-    before.load_data()
-    before_data = before.get_data()
-
-    after, _ = get_event_data(
-        bids_path, tmin=-0.25, tmax=0.75, event_key="Left Target"
-    )
-    after.load_data()
-    after_data = after.get_data()
-
-    if domain.lower() == "time":
-        ## Time Domain
-        ntrials, nchs, nsteps = before_data.shape
-
-        X = np.vstack(
-            [
-                before_data.reshape(before_data.shape[0], -1),  # class 0
-                after_data.reshape(after_data.shape[0], -1),  # class 1
-            ]
-        )
-        y = np.concatenate([np.zeros(len(before_data)), np.ones(len(after_data))])
-        image_height = nchs
-        image_width = nsteps
-
-    elif domain.lower() == "frequency":
-        ## Freq Domain
-        nfreqs = 10
-        lfreq, hfreq = (70, 200)
-        freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
-        n_cycles = freqs / 3.0  # different number of cycle per frequency
-
-        after_power = tfr_morlet(
-            after,
-            freqs=freqs,
-            n_cycles=n_cycles,
-            average=False,
-            return_itc=False,
-            decim=3,
-            n_jobs=1,
-        ).data
-        before_power = tfr_morlet(
-            before,
-            freqs=freqs,
-            n_cycles=n_cycles,
-            average=False,
-            return_itc=False,
-            decim=3,
-            n_jobs=1,
-        ).data
 
 
 def plot_paired_cvs_baseline(scores1, scores2, axs):
@@ -588,7 +506,9 @@ def baseline_experiment(bids_path, destination_path, cv, metrics, random_state=N
     plt.close(fig)
 
 
-def frequency_band_comparison(epochs, destination_path, cv, metrics, nfreqs=10, random_state=None):
+def frequency_band_comparison(
+    epochs, destination_path, cv, metrics, nfreqs=10, random_state=None
+):
     """
     docstring
     """
@@ -664,7 +584,7 @@ def frequency_band_comparison(epochs, destination_path, cv, metrics, nfreqs=10, 
     accuracies["ID"] = id_col
 
     df = pd.DataFrame(accuracies)
-    
+
     # Re-order so that control is hi-gamma band
     idx = [list(scores.keys())[-1]] + list(scores.keys())[:-1]
     my_data = dabest.load(df, idx=idx, resamples=100, random_seed=seed)
@@ -777,7 +697,9 @@ if __name__ == "__main__":
 
     elif experiment == "frequency_bands":
         epochs.crop(tmin=-0.5, tmax=1.0)
-        frequency_band_comparison(epochs, results_path / subject, cv, metrics, random_state=seed)
+        frequency_band_comparison(
+            epochs, results_path / subject, cv, metrics, random_state=seed
+        )
 
     elif experiment == "plot_event_durations":
         fig, ax = plt.subplots(dpi=150, figsize=(8, 6))

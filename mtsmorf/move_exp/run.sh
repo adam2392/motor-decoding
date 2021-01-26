@@ -20,8 +20,7 @@ for subject in "${subjects[@]}"
 do
     echo "Running $subject..."
     # python3 ./move_exp/experiments.py $subject -experiment shuffle
-    # python3 ./move_exp/experiments.py $subject -experiment movement_onset_time
-    # python3 ./move_exp/experiments.py $subject -experiment movement_onset_frequency
+    # python3 ./move_exp/movement_onset_experiment.py $subject
     # python3 ./move_exp/experiments.py $subject -experiment baseline
     # python3 ./move_exp/experiments.py $subject -experiment frequency_bands
     # python3 ./move_exp/experiments.py $subject -experiment plot_event_durations

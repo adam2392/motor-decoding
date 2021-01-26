@@ -1,3 +1,7 @@
+import sys
+
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -6,7 +10,11 @@ from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 
-from ..io.read import get_trial_info, read_label, read_dataset
+from cv import cv_roc, cv_fit
+
+sys.path.append(str(Path(__file__).parent.parent / "io"))
+
+from read import get_trial_info, read_label, read_dataset
 
 
 def _preprocess_epochs(epochs, resample_rate=500):
@@ -65,6 +73,7 @@ def get_event_data(
     epochs = read_dataset(
         bids_path, kind=kind, tmin=tmin, tmax=tmax, event_key=event_key
     )
+    epochs.load_data()
     epochs = _preprocess_epochs(epochs)
 
     # get labels
@@ -105,3 +114,31 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     clfs = [mtsmorf, srerf, lr, rf, dummy]
 
     return clfs
+
+
+def fit_classifiers_cv(X, y, image_height, image_width, cv, metrics, random_state=None):
+    clf_scores = dict()
+    clfs = initialize_classifiers(
+        image_height, image_width, n_jobs=-1, random_state=random_state
+    )
+
+    for clf in clfs:
+        if clf.__class__.__name__ == "rerfClassifier":
+            clf_name = clf.get_params()["projection_matrix"]
+        elif clf.__class__.__name__ == "DummyClassifier":
+            clf_name = clf.strategy
+        else:
+            clf_name = clf.__class__.__name__
+
+        clf_scores[clf_name] = cv_fit(
+            clf,
+            X,
+            y,
+            cv=cv,
+            metrics=metrics,
+            n_jobs=None,
+            return_train_score=True,
+            return_estimator=True,
+        )
+
+    return clf_scores

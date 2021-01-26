@@ -10,12 +10,7 @@ import yaml
 
 from mne_bids import BIDSPath
 
-# Hack-y way to import from files in sibling "io" directory
-sys.path.append(str(Path(__file__).parent.parent / "io"))
-sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
-
-from read import read_dataset, read_label, read_trial, get_trial_info
-
+from cv import cv_fit
 from experiment_functions import preprocess_epochs
 from plotting import (
     plot_signals,
@@ -23,8 +18,11 @@ from plotting import (
     plot_feature_importances,
     plot_cv_indices,
 )
+
+# Hack-y way to import from files in sibling "io" directory
+sys.path.append(str(Path(__file__).parent.parent / "io"))
+from read import read_dataset, read_label, read_trial, get_trial_info
 from utils import NumpyEncoder
-from cv import cv_fit
 
 
 if __name__ == "__main__":
@@ -34,11 +32,13 @@ if __name__ == "__main__":
     # tmin, tmax = (-0.75, 0.5)   # Only encapsulates the Left Target event
     tmin, tmax = (-0.5, 0.5)
 
-    bids_root = Path("/Volumes/Mac/research/data/efri/")
+    # configure paths from ./config.yml
+    with open(Path(os.path.dirname(__file__)) / "config.yml") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
+    bids_root = Path(config["bids_root"])
     derivatives_path = (
-        bids_root
-        / "derivatives"
+        Path(config["derivatives_path"])
         / "preprocessed"
         / f"tmin={tmin}-tmax={tmax}"
         / "band-pass=1-1000Hz-downsample=500"
@@ -46,10 +46,6 @@ if __name__ == "__main__":
 
     if not os.path.exists(derivatives_path):
         os.makedirs(derivatives_path)
-
-    # new directory paths for outputs and inputs at Hackerman workstation
-    # bids_root = Path("/home/adam2392/hdd/Dropbox/efri/")
-    # results_path = bids_root / "derivatives" / "raw" / "mtsmorf" / "results"
 
     with open(Path(os.path.dirname(__file__)) / "metadata.yml") as f:
         metadata = yaml.load(f, Loader=yaml.FullLoader)
@@ -67,7 +63,7 @@ if __name__ == "__main__":
             run="01",
             suffix="ieeg",
             extension=".vhdr",
-            root=bids_root
+            root=bids_root,
         )
 
         bids_path = BIDSPath(**path_identifiers)
@@ -90,4 +86,4 @@ if __name__ == "__main__":
         fpath = derivatives_path / subject / fname
         epochs.save(fpath, overwrite=True)
 
-        print(f"{subject.upper()} epochs saved at {fpath}")
+        print(f"{subject.upper()} epochs saved at {fpath}.")

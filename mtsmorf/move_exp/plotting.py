@@ -273,95 +273,6 @@ def _compute_roc_multiclass(y_true, y_score, n_classes):
     return fprs, tprs, roc_auc
 
 
-def plot_roc_multiclass_cv(y_pred_probas, X, y, test_inds, ax=None):
-
-    if ax is None:
-        ax = plt.gca()
-
-    fprs = []
-    tprs = []
-    aucs = []
-
-    # Compute ROC metrics for each fold
-    for i, (y_pred_proba, test) in enumerate(zip(y_pred_probas, test_inds)):
-        X_test, y_test = X[test], y[test]
-        n_classes = len(np.unique(y_test))
-
-        # y_score = estimator.predict_proba(X_test)
-
-        y_pred_proba = np.array(y_pred_proba)
-
-        # Compute ROC metrics for each class
-        # fpr, tpr, roc_auc = _compute_roc_multiclass(y_test, y_score, n_classes)
-        fpr, tpr, roc_auc = _compute_roc_multiclass(y_test, y_pred_proba, n_classes)
-
-        fprs.append(fpr)
-        tprs.append(tpr)
-        aucs.append(roc_auc)
-
-    # n_folds x n_classes x 100
-    fprs = np.array(fprs)
-    tprs = np.array(tprs)
-    aucs = np.array(aucs)
-
-    mean_fprs = np.mean(fprs, axis=0)
-    mean_tprs = np.mean(tprs, axis=0)
-    mean_tprs[:, -1] = 1.0
-
-    # For each class, compute ROC metrics averaged over the folds
-    # for i, color in zip(range(n_classes), colors):
-    #     mean_fpr = mean_fprs[i]
-    #     mean_tpr = mean_tprs[i]
-    #     mean_auc = auc(mean_fpr, mean_tpr)
-    #     std_auc = np.std(aucs, axis=0)[i]
-    #     ax.plot(
-    #         mean_fpr,
-    #         mean_tpr,
-    #         color=color,
-    #         label=r"{label_name}: Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
-    #             label_name=label_names[i], mean_auc=mean_auc, std_auc=std_auc
-    #         ),
-    #     )
-
-    #     std_tpr = np.std(tprs, axis=0)[i]
-    #     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-    #     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-    #     ax.fill_between(
-    #         mean_fpr,
-    #         tprs_lower,
-    #         tprs_upper,
-    #         color=color,
-    #         alpha=0.2,
-    #     )
-    for i in range(n_classes):
-        mean_fpr = mean_fprs[i]
-        mean_tpr = mean_tprs[i]
-        mean_auc = auc(mean_fpr, mean_tpr)
-        std_auc = np.std(aucs, axis=0)[i]
-        ax.plot(
-            mean_fpr,
-            mean_tpr,
-            label=r"{label_name}: Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
-                label_name=label_names[i], mean_auc=mean_auc, std_auc=std_auc
-            ),
-            ls="-",
-        )
-
-        std_tpr = np.std(tprs, axis=0)[i]
-        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-        ax.fill_between(
-            mean_fpr,
-            tprs_lower,
-            tprs_upper,
-            alpha=0.1,
-        )
-
-    ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.8)
-
-    return ax
-
-
 def plot_feature_importances(
     result, ch_names, times, image_height, image_width, ax=None
 ):
@@ -499,6 +410,92 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=N
     return ax
 
 
+def plot_roc_multiclass_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None):
+
+    if ax is None:
+        ax = plt.gca()
+
+    fprs = []
+    tprs = []
+    aucs = []
+
+    # Compute ROC metrics for each fold
+    for i, (y_pred_proba, test) in enumerate(zip(y_pred_probas, test_inds)):
+        X_test, y_test = X[test], y[test]
+        n_classes = len(np.unique(y_test))
+        y_pred_proba = np.array(y_pred_proba)
+
+        # Compute ROC metrics for each class
+        fpr, tpr, roc_auc = _compute_roc_multiclass(y_test, y_pred_proba, n_classes)
+
+        fprs.append(fpr)
+        tprs.append(tpr)
+        aucs.append(roc_auc)
+
+    # n_folds x n_classes x 100
+    fprs = np.array(fprs)
+    tprs = np.array(tprs)
+    aucs = np.array(aucs)
+
+    mean_fprs = np.mean(fprs, axis=0)
+    mean_tprs = np.mean(tprs, axis=0)
+    mean_tprs[:, -1] = 1.0
+
+    # For each class, compute ROC metrics averaged over the folds
+    # for i, color in zip(range(n_classes), colors):
+    #     mean_fpr = mean_fprs[i]
+    #     mean_tpr = mean_tprs[i]
+    #     mean_auc = auc(mean_fpr, mean_tpr)
+    #     std_auc = np.std(aucs, axis=0)[i]
+    #     ax.plot(
+    #         mean_fpr,
+    #         mean_tpr,
+    #         color=color,
+    #         label=r"{label_name}: Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+    #             label_name=label_names[i], mean_auc=mean_auc, std_auc=std_auc
+    #         ),
+    #     )
+
+    #     std_tpr = np.std(tprs, axis=0)[i]
+    #     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    #     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    #     ax.fill_between(
+    #         mean_fpr,
+    #         tprs_lower,
+    #         tprs_upper,
+    #         color=color,
+    #         alpha=0.2,
+    #     )
+    for i in range(n_classes):
+        mean_fpr = mean_fprs[i]
+        mean_tpr = mean_tprs[i]
+        mean_auc = auc(mean_fpr, mean_tpr)
+        std_auc = np.std(aucs, axis=0)[i]
+        ax.plot(
+            mean_fpr,
+            mean_tpr,
+            label=r"{label_name}: {clf_name} Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+                label_name=label_names[i], clf_name=label, mean_auc=mean_auc, std_auc=std_auc
+            ),
+            ls="-",
+        )
+
+        std_tpr = np.std(tprs, axis=0)[i]
+        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+        ax.fill_between(
+            mean_fpr,
+            tprs_lower,
+            tprs_upper,
+            alpha=0.1,
+        )
+
+    if show_chance:
+        ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.8)
+
+    return ax
+
+
 def plot_cv_indices(cv, X, y, ax, n_splits, lw=10):
     """Create a sample plot for indices of a cross-validation object.
     https://scikit-learn.org/stable/auto_examples/model_selection/plot_cv_indices.html
@@ -618,16 +615,29 @@ def plot_classifier_performance(clf_scores, X, y, axs=None):
     axs = axs.flatten()
     
     # 1. Plot roc curves
-    for clf_name, scores in clf_scores.items():
-        plot_roc_cv(
-            scores["test_predict_proba"],
-            X,
-            y,
-            scores["test_inds"],
-            label=clf_name,
-            show_chance=False,
-            ax=axs[0],
-        )
+    n_classes = len(np.unique(y))
+    if n_classes > 2:
+        for clf_name, scores in clf_scores.items():
+            plot_roc_multiclass_cv(
+                scores["test_predict_proba"],
+                X,
+                y,
+                scores["test_inds"],
+                label=clf_name,
+                show_chance=False,
+                ax=axs[0],
+            )
+    else:
+        for clf_name, scores in clf_scores.items():
+            plot_roc_cv(
+                scores["test_predict_proba"],
+                X,
+                y,
+                scores["test_inds"],
+                label=clf_name,
+                show_chance=False,
+                ax=axs[0],
+            )
 
     # 2. Plot accuracies
     plot_accuracies(clf_scores, ax=axs[1])
