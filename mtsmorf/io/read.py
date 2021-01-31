@@ -182,8 +182,6 @@ def read_label(bids_path, trial_id=None, label_keyword="bet_amount"):
     ].apply(pd.to_numeric)
 
     trial_ids = behav.trial_id
-    trial_id = None
-    label_keyword = "target_direction"
 
     if trial_id is not None:
         # info for specified trial_id from behav tsv

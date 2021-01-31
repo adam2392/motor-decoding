@@ -32,13 +32,10 @@ def _preprocess_epochs(epochs, resample_rate=500):
     return new_epochs
 
 
-def _preprocess_labels(labels, behav, events):
+def _preprocess_labels(labels, behav):
     """Preprocess labels by removing unsuccessful or perturbed trials."""
     if not isinstance(behav, pd.DataFrame):
         behav = pd.DataFrame(behav)
-
-    if not isinstance(events, pd.DataFrame):
-        events = pd.DataFrame(events)
 
     # filter out labels for unsuccessful trials
     successful_trials = behav[behav.successful_trial_flag == 1]
@@ -81,7 +78,7 @@ def get_event_data(
         bids_path, trial_id=trial_id, label_keyword=label_keyword
     )
     behav, events = map(pd.DataFrame, get_trial_info(bids_path))
-    labels = _preprocess_labels(labels, behav, events)
+    labels = _preprocess_labels(labels, behav)
 
     return epochs, labels
 
