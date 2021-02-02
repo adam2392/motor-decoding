@@ -23,11 +23,13 @@ from sklearn.utils import check_random_state
 from cv import cv_roc, cv_fit
 from move_experiment_functions import (
     get_event_data,
+    get_event_durations,
     initialize_classifiers,
     fit_classifiers_cv,
 )
 from plotting import (
     plot_roc_cv,
+    plot_roc_multiclass_cv,
     plot_accuracies,
     plot_roc_aucs,
     plot_event_durations,
@@ -40,6 +42,9 @@ sys.path.append(str(Path(__file__).parent.parent / "io"))
 sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
 
 from read import read_dataset, read_label, read_trial, get_trial_info, _get_bad_chs
+from utils import NumpyEncoder
+import json
+from sklearn.inspection import permutation_importance
 
 
 def run_classifier_comparison(
@@ -606,6 +611,174 @@ def frequency_band_comparison(
     plt.close(fig)
 
 
+def time_window_experiment(
+    bids_path,
+    destination_path,
+    domain,
+    cv,
+    metrics,
+    freqs=None,
+    n_cycles=None,
+    random_state=None,
+):
+    if domain.lower() in ["frequency", "freq"] and (freqs is None or n_cycles is None):
+        raise TypeError("freqs and n_cycles must not be None to run frequency domain")
+
+    subject = bids_path.subject
+
+    destination = (
+        Path(destination_path) / subject / f"trial_specific_window/{domain}_domain/"
+    )
+    if not os.path.exists(destination_path):
+        os.makedirs(destination)
+
+    go_cue_durations = get_event_durations(
+        bids_path, event_key="Left Target", periods=-1
+    )
+    left_target_durations = get_event_durations(
+        bids_path, event_key="Left Target", periods=1
+    )
+
+    tmin = -max(go_cue_durations)
+    tmax = max(left_target_durations)
+
+    epochs, labels = get_event_data(bids_path, tmin=tmin - 0.2, tmax=tmax + 0.2)
+
+    if domain.lower() in ["frequency", "freq"]:
+        power = tfr_morlet(
+            epochs,
+            freqs=freqs,
+            n_cycles=n_cycles,
+            average=False,
+            return_itc=False,
+            decim=3,
+            n_jobs=-1,
+        )
+        data = power.data
+        ntrials, nchs, nfreqs, nsteps = data.shape
+        print(f"{subject.upper()}: data.shape = ({data.shape})")
+
+        t = power.times
+        mask = (t >= -np.asarray(go_cue_durations)[:, None, None, None]) & (
+            t <= np.asarray(left_target_durations)[:, None, None, None]
+        )
+        masked_data = data * mask
+
+        image_height = nchs * nfreqs
+        image_width = nsteps
+
+    elif domain.lower() == "time":
+        data = epochs.get_data()
+        ntrials, nchs, nsteps = data.shape
+        print(f"{subject.upper()}: data.shape = ({data.shape})")
+
+        t = epochs.times
+        mask = (t >= -np.asarray(go_cue_durations)[:, None, None]) & (
+            t <= np.asarray(left_target_durations)[:, None, None]
+        )
+        masked_data = data * mask
+
+        image_height = nchs
+        image_width = nsteps
+
+    else:
+        raise ValueError('domain must be one of "time", "freq", or "frequency".')
+
+    X = masked_data.reshape(ntrials, -1)
+    y = labels
+
+    cv_scores = fit_classifiers_cv(
+        X, y, image_height, image_width, cv, metrics, random_state=random_state
+    )
+
+    n_repeats = 5  # number of repeats for permutation importance
+
+    clf_name = "MT-MORF"
+    scores = cv_scores[clf_name]
+    best_ind = np.argmax(scores["test_roc_auc_ovr"])
+    best_estimator = scores["estimator"][best_ind]
+    best_test_inds = scores["test_inds"][best_ind]
+
+    X_test = X[best_test_inds]
+    y_test = y[best_test_inds]
+
+    # Run feat importance for roc_auc_ovr
+    print(f"{subject.upper()}: Running feature importances...")
+    scoring_methods = [
+        "roc_auc_ovr",
+    ]
+    for scoring_method in scoring_methods:
+        key_mean = f"validate_{scoring_method}_imp_mean"
+        if key_mean not in scores:
+            scores[key_mean] = []
+
+        key_std = f"validate_{scoring_method}_imp_std"
+        if key_std not in scores:
+            scores[key_std] = []
+
+        result = permutation_importance(
+            best_estimator,
+            X_test,
+            y_test,
+            scoring=scoring_method,
+            n_repeats=n_repeats,
+            n_jobs=1,
+            random_state=random_state,
+        )
+
+        imp_std = result.importances_std
+        imp_vals = result.importances_mean
+        scores[key_mean].append(list(imp_vals))
+        scores[key_std].append(list(imp_std))
+
+    cv_scores[clf_name] = scores
+
+    for clf_name, clf_scores in cv_scores.items():
+
+        estimator = clf_scores["estimator"]
+        if estimator is not None:
+            del clf_scores["estimator"]
+
+        with open(destination / f"{subject}_{clf_name}_results.json", "w") as fout:
+            json.dump(clf_scores, fout, cls=NumpyEncoder)
+            print(f"{subject.upper()} CV results for {clf_name} saved as json.")
+        clf_scores["estimator"] = estimator
+
+    fig, axs = plt.subplots(nrows=2, ncols=3, dpi=100, figsize=(24, 12))
+    axs = axs.flatten()
+    for i, (clf_name, scores) in enumerate(cv_scores.items()):
+        ax = axs[i]
+
+        plot_roc_multiclass_cv(
+            scores["test_predict_proba"],
+            X,
+            y,
+            scores["test_inds"],
+            ax=ax,
+        )
+
+        ax.set(
+            xlabel="False Positive Rate",
+            ylabel="True Positive Rate",
+            xlim=[-0.05, 1.05],
+            ylim=[-0.05, 1.05],
+            title=f"{subject.upper()} {clf_name} One vs. Rest ROC Curves",
+        )
+        ax.legend(loc="lower right")
+
+    plot_roc_aucs(clf_scores, ax=axs[-1])
+    axs[-1].set(
+        ylabel="ROC AUC",
+        title=f"{subject.upper()}: ROC AUCs for Trial-Specific Time Window",
+    )
+    fig.tight_layout()
+    plt.savefig(destination / f"{subject}_trial_specific_time_window_rocs.png")
+    plt.close(fig)
+    print(
+        f"Figure saved at {destination}/{subject}_trial_specific_time_window_rocs.png"
+    )
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -617,6 +790,8 @@ if __name__ == "__main__":
             "shuffle",
             "baseline",
             "frequency_bands",
+            "trial_specific_time_window_time",
+            "trial_specific_time_window_freq",
             "plot_event_durations",
             "plot_event_onsets",
         ],
@@ -699,6 +874,38 @@ if __name__ == "__main__":
         epochs.crop(tmin=-0.5, tmax=1.0)
         frequency_band_comparison(
             epochs, results_path / subject, cv, metrics, random_state=seed
+        )
+
+    elif experiment == "trial_specific_time_window_time":
+        nfreqs = 10
+        lfreq, hfreq = (70, 200)
+        freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
+        n_cycles = freqs / 3.0
+
+        time_window_experiment(
+            bids_path,
+            results_path / subject,
+            "time",
+            cv,
+            metrics,
+            random_state=seed,
+        )
+
+    elif experiment == "trial_specific_time_window_freq":
+        nfreqs = 10
+        lfreq, hfreq = (70, 200)
+        freqs = np.logspace(*np.log10([lfreq, hfreq]), num=nfreqs)
+        n_cycles = freqs / 3.0
+
+        time_window_experiment(
+            bids_path,
+            results_path / subject,
+            "freq",
+            cv,
+            metrics,
+            freqs=freqs,
+            n_cycles=n_cycles,
+            random_state=seed,
         )
 
     elif experiment == "plot_event_durations":

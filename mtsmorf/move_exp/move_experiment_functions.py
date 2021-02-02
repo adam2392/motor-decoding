@@ -4,11 +4,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 from rerf.rerfClassifier import rerfClassifier
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.utils import check_random_state
 
 from cv import cv_roc, cv_fit
 
@@ -32,22 +34,80 @@ def _preprocess_epochs(epochs, resample_rate=500):
     return new_epochs
 
 
-def _preprocess_labels(labels, behav):
-    """Preprocess labels by removing unsuccessful or perturbed trials."""
+def _get_unperturbed_trial_inds(behav):
+    """Get trial indices where force magnitude > 0."""
     if not isinstance(behav, pd.DataFrame):
         behav = pd.DataFrame(behav)
 
-    # filter out labels for unsuccessful trials
-    successful_trials = behav[behav.successful_trial_flag == 1]
-    successful_trials.index = np.arange(len(successful_trials))
+    behav[["successful_trial_flag", "force_magnitude"]] = behav[
+        ["successful_trial_flag", "force_magnitude"]
+    ].apply(pd.to_numeric)
+
+    # filter out failed trials -- we don't want these anyway
+    successes = behav[behav.successful_trial_flag == 1]
+    successes.index = np.arange(len(successes))
 
     # filter out labels for perturbed trials
-    perturbed_trial_inds = successful_trials[
-        successful_trials.force_magnitude > 0
-    ].index
-    labels = np.delete(labels, perturbed_trial_inds)
+    unperturbed_trial_inds = successes[successes.force_magnitude == 0].index
+    unperturbed_trial_inds = unperturbed_trial_inds.to_list()
+
+    return unperturbed_trial_inds
+
+
+def get_trial_info_pd(bids_path, verbose=False):
+    """Convert behav and events OrderedDict objects to pd.DataFrame objects
+    with numerical columns appropriately typed.
+    """
+    behav, events = map(pd.DataFrame, get_trial_info(bids_path, verbose=verbose))
+
+    behav_numerical_cols = [
+        "trial_id",
+        "successful_trial_flag",
+        "missed_target_flag",
+        "correct_speed_flag",
+        "force_angular",
+        "force_magnitude",
+        "target_direction",
+    ]
+    behav[behav_numerical_cols] = behav[behav_numerical_cols].apply(pd.to_numeric)
+
+    events_numerical_cols = ["onset", "duration", "value", "sample"]
+    events[events_numerical_cols] = events[events_numerical_cols].apply(pd.to_numeric)
+    return behav, events
+
+
+def get_preprocessed_labels(
+    bids_path, trial_id=None, label_keyword="target_direction", verbose=False
+):
+    """Read labels for each trial for the specified keyword. Keep labels for
+    successful and unperturbed trials.
+    """
+    behav, events = get_trial_info_pd(bids_path, verbose=verbose)
+    labels, _ = read_label(bids_path, trial_id=trial_id, label_keyword=label_keyword)
+
+    # keep perturbed trial inds
+    unperturbed_trial_inds = _get_unperturbed_trial_inds(behav)
+    labels = labels[unperturbed_trial_inds]
 
     return labels
+
+
+def get_event_durations(bids_path, event_key="Left Target", periods=1, verbose=False):
+    """Get the event durations for the specified event_key for the specified
+    period.
+    """
+    behav, events = get_trial_info_pd(bids_path, verbose=verbose)
+
+    # get difference between Left Target onset and its preceding and succeeding events
+    inds = events.trial_type == event_key
+    durations = events.onset.diff(periods=periods).abs()[inds]
+    durations.index = np.arange(len(durations))
+
+    # remove perturbed trial indices
+    unperturbed_trial_inds = _get_unperturbed_trial_inds(behav)
+    durations = durations.iloc[unperturbed_trial_inds]
+
+    return durations
 
 
 def get_event_data(
@@ -62,25 +122,69 @@ def get_event_data(
     """Read preprocessed mne.Epochs data structure time locked to label_keyword
     with corresponding trial information.
     """
-    subject = bids_path.subject
-    if subject == "":
-        raise KeyError("specified bids_path has no subject.")
-
     # get epochs
+    behav, _ = get_trial_info_pd(bids_path)
+
     epochs = read_dataset(
         bids_path, kind=kind, tmin=tmin, tmax=tmax, event_key=event_key
     )
     epochs.load_data()
     epochs = _preprocess_epochs(epochs)
 
+    unperturbed_trial_inds = _get_unperturbed_trial_inds(behav)
+    perturbed_trial_inds = [
+        i for i in range(len(epochs)) if not i in unperturbed_trial_inds
+    ]
+    epochs.drop(perturbed_trial_inds)
+
     # get labels
-    labels, trial_ids = read_label(
+    labels = get_preprocessed_labels(
         bids_path, trial_id=trial_id, label_keyword=label_keyword
     )
-    behav, events = map(pd.DataFrame, get_trial_info(bids_path))
-    labels = _preprocess_labels(labels, behav)
 
     return epochs, labels
+
+
+def independence_test(X, y):
+    """Compute point estimates for regression coefficient between X and y."""
+    covariates = sm.add_constant(X)
+    model = sm.OLS(y, covariates)
+
+    res = model.fit(disp=False)
+    coeff = res.params[1]
+
+    return coeff
+
+
+def bootstrap_independence_test(
+    X, y, num_bootstraps=200, alpha=0.05, random_state=None
+):
+    """Bootstrap esitmates for regression coefficients between X and y."""
+    rng = check_random_state(random_state)
+
+    Ql = alpha / 2
+    Qu = 1 - alpha / 2
+
+    estimates = np.empty(
+        num_bootstraps,
+    )
+
+    n = len(X)
+
+    for i in range(num_bootstraps):
+
+        # Compute OR estimate for bootstrap sample
+        inds = rng.randint(n, size=n)
+        Xboot = X.iloc[inds]
+        yboot = y.iloc[inds]
+
+        estimates[i] = independence_test(Xboot, yboot)
+
+    # Get desired lower and upper percentiles of approximate sampling distribution
+    q_low = np.percentile(estimates, Ql * 100)
+    q_up = np.percentile(estimates, Qu * 100)
+
+    return q_low, q_up, estimates
 
 
 def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=None):
@@ -114,6 +218,7 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
 
 
 def fit_classifiers_cv(X, y, image_height, image_width, cv, metrics, random_state=None):
+    """Run cross-validation for classifiers listed in initialize_classifiers()."""
     clf_scores = dict()
     clfs = initialize_classifiers(
         image_height, image_width, n_jobs=-1, random_state=random_state

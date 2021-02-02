@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent / "io"))
 from utils import NumpyEncoder
 
 
-def get_trial_info(bids_path):
+def get_trial_info(bids_path, verbose=False):
     """Get behavior and events trial info from tsv files."""
     behav_fpath = _find_matching_sidecar(bids_path, suffix="behav", extension=".tsv")
     behav_tsv = _from_tsv(behav_fpath)
@@ -31,10 +31,12 @@ def get_trial_info(bids_path):
     # successful trial indices
     success_inds = np.where(success_trial_flag == 1)[0]
     num_trials = len(behav_tsv["trial_id"])
-    print(
-        f"Out of {num_trials} trials, there were {len(success_inds)} successful trials "
-        f"in {bids_path}."
-    )
+
+    if verbose:
+        print(
+            f"Out of {num_trials} trials, there were {len(success_inds)} successful trials "
+            f"in {bids_path}."
+        )
 
     return behav_tsv, events_tsv
 
@@ -174,6 +176,7 @@ def read_trial(bids_path, trial_id, picks=None):
 
 def read_label(bids_path, trial_id=None, label_keyword="bet_amount"):
     """Read trial's label"""
+    
     # get trial information
     behav_tsv, _ = get_trial_info(bids_path)
     behav = pd.DataFrame(behav_tsv)

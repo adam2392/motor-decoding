@@ -61,9 +61,9 @@ def plot_event_durations(behav, events, jitter=0.025, ax=None, random_state=None
     ## Remove unsuccessful and perturbed trials
     successful_trials = behav[behav.successful_trial_flag == 1]
     successful_trials.index = go_cue_duration.index
-    unperturbed_trial_inds = successful_trials.force_magnitude == 0
-    go_cue_duration = go_cue_duration[unperturbed_trial_inds]
-    left_target_duration = left_target_duration[unperturbed_trial_inds]
+    perturbed_trial_inds = successful_trials.force_magnitude > 0
+    go_cue_duration = go_cue_duration[~perturbed_trial_inds]
+    left_target_duration = left_target_duration[~perturbed_trial_inds]
 
     ## Plot stripplot with some jitter in the x-coordinate
     df = pd.DataFrame(
@@ -136,11 +136,11 @@ def plot_event_onsets(behav, events, jitter=0.025, ax=None, random_state=None):
     ## Remove unsuccessful and perturbed trials
     successful_trials = behav[behav.successful_trial_flag == 1]
     successful_trials.index = go_cue_onset.index
-    unperturbed_trial_inds = successful_trials.force_magnitude == 0
+    perturbed_trial_inds = successful_trials.force_magnitude > 0
 
-    go_cue_onset = go_cue_onset[unperturbed_trial_inds]
-    left_target_onset = left_target_onset[unperturbed_trial_inds]
-    hit_target_onset = hit_target_onset[unperturbed_trial_inds]
+    go_cue_onset = go_cue_onset[~perturbed_trial_inds]
+    left_target_onset = left_target_onset[~perturbed_trial_inds]
+    hit_target_onset = hit_target_onset[~perturbed_trial_inds]
 
     ## Plot data in strip plot
     df = pd.DataFrame(
