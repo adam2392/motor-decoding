@@ -45,6 +45,7 @@ from read import read_dataset, read_label, read_trial, get_trial_info, _get_bad_
 from utils import NumpyEncoder
 import json
 from sklearn.inspection import permutation_importance
+import yaml
 
 
 def run_classifier_comparison(
@@ -627,9 +628,9 @@ def time_window_experiment(
     subject = bids_path.subject
 
     destination = (
-        Path(destination_path) / subject / f"trial_specific_window/{domain}_domain/"
+        Path(destination_path) / f"trial_specific_window/{domain}_domain/"
     )
-    if not os.path.exists(destination_path):
+    if not os.path.exists(destination):
         os.makedirs(destination)
 
     go_cue_durations = get_event_durations(
@@ -704,34 +705,38 @@ def time_window_experiment(
 
     # Run feat importance for roc_auc_ovr
     print(f"{subject.upper()}: Running feature importances...")
-    scoring_methods = [
-        "roc_auc_ovr",
-    ]
-    for scoring_method in scoring_methods:
-        key_mean = f"validate_{scoring_method}_imp_mean"
-        if key_mean not in scores:
-            scores[key_mean] = []
+    try:
+        scoring_methods = [
+            "roc_auc_ovr",
+        ]
+        for scoring_method in scoring_methods:
+            key_mean = f"validate_{scoring_method}_imp_mean"
+            if key_mean not in scores:
+                scores[key_mean] = []
 
-        key_std = f"validate_{scoring_method}_imp_std"
-        if key_std not in scores:
-            scores[key_std] = []
+            key_std = f"validate_{scoring_method}_imp_std"
+            if key_std not in scores:
+                scores[key_std] = []
 
-        result = permutation_importance(
-            best_estimator,
-            X_test,
-            y_test,
-            scoring=scoring_method,
-            n_repeats=n_repeats,
-            n_jobs=1,
-            random_state=random_state,
-        )
+            result = permutation_importance(
+                best_estimator,
+                X_test,
+                y_test,
+                scoring=scoring_method,
+                n_repeats=n_repeats,
+                n_jobs=1,
+                random_state=random_state,
+            )
 
-        imp_std = result.importances_std
-        imp_vals = result.importances_mean
-        scores[key_mean].append(list(imp_vals))
-        scores[key_std].append(list(imp_std))
+            imp_std = result.importances_std
+            imp_vals = result.importances_mean
+            scores[key_mean].append(list(imp_vals))
+            scores[key_std].append(list(imp_std))
 
-    cv_scores[clf_name] = scores
+        cv_scores[clf_name] = scores
+    except:
+        print('feat importances failed...')
+        traceback.print_exc()
 
     for clf_name, clf_scores in cv_scores.items():
 
@@ -766,7 +771,7 @@ def time_window_experiment(
         )
         ax.legend(loc="lower right")
 
-    plot_roc_aucs(clf_scores, ax=axs[-1])
+    plot_roc_aucs(cv_scores, ax=axs[-1])
     axs[-1].set(
         ylabel="ROC AUC",
         title=f"{subject.upper()}: ROC AUCs for Trial-Specific Time Window",
@@ -802,10 +807,11 @@ if __name__ == "__main__":
     subject = args.subject
     experiment = args.experiment
 
-    bids_root = Path("/workspaces/research/mnt/data/efri/")
-    results_path = Path(
-        "/workspaces/research/efri OneDrive/Adam Li - efri/derivatives/workstation_output"
-    )
+    with open(Path(os.path.abspath(__file__)).parent / "config.yml") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    bids_root = Path(config["bids_root"])
+    results_path = Path(config["results_path"])
 
     # path identifiers
     path_identifiers = dict(
@@ -821,7 +827,6 @@ if __name__ == "__main__":
     bids_path = BIDSPath(**path_identifiers)
 
     # Prep data for model fitting
-    epochs, labels = get_event_data(bids_path, tmin=tmin, tmax=tmax)
 
     if not os.path.exists(results_path / subject):
         try:
@@ -847,6 +852,7 @@ if __name__ == "__main__":
     )
 
     if experiment == "shuffle":
+        epochs, labels = get_event_data(bids_path, tmin=tmin, tmax=tmax)
         shuffle_channels_experiment(
             epochs,
             labels,
@@ -871,6 +877,7 @@ if __name__ == "__main__":
         )
 
     elif experiment == "frequency_bands":
+        epochs, labels = get_event_data(bids_path, tmin=tmin, tmax=tmax)
         epochs.crop(tmin=-0.5, tmax=1.0)
         frequency_band_comparison(
             epochs, results_path / subject, cv, metrics, random_state=seed
