@@ -148,7 +148,6 @@ def get_event_data(
 def independence_test(X, y):
     """Compute point estimates for coefficient between X and y."""
     covariates = sm.add_constant(X)
-    # model = sm.OLS(y, covariates)
     model = sm.MNLogit(y, covariates)
 
     res = model.fit(disp=False)
@@ -177,7 +176,6 @@ def bootstrap_independence_test(
         Xboot = X.iloc[inds]
         yboot = y.iloc[inds]
 
-        # estimates[i] = independence_test(Xboot, yboot)
         estimates.append(independence_test(Xboot, yboot))
 
     # Get desired lower and upper percentiles of approximate sampling distribution
@@ -218,7 +216,7 @@ def bootstrap_independence_test_OLS(
         Xboot = X.iloc[inds]
         yboot = y.iloc[inds]
 
-        estimates[i] = independence_test(Xboot, yboot)
+        estimates[i] = independence_test_OLS(Xboot, yboot)
 
     # Get desired lower and upper percentiles of approximate sampling distribution
     q_low = np.percentile(estimates, Ql * 100)
