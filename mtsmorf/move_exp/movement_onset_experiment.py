@@ -11,8 +11,8 @@ from mne.time_frequency.tfr import tfr_morlet
 from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold
 
-from cv import cv_fit
-from move_experiment_functions import get_event_data, initialize_classifiers
+from cv import cv_fit, initialize_classifiers
+from move_experiment_functions import get_event_data
 from plotting import plot_classifier_performance
 
 

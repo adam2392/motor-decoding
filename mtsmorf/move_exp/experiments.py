@@ -21,19 +21,18 @@ from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklearn.utils import check_random_state
 
 from cv import cv_roc, cv_fit
-from move_experiment_functions import (
-    get_event_data,
-    get_event_durations,
-    initialize_classifiers,
+from move_experiment_functions import get_event_data
+from time_window_selection_functions import (
     fit_classifiers_cv,
+    get_event_durations,
+    plot_event_durations,
+    plot_event_onsets,
 )
 from plotting import (
     plot_roc_cv,
     plot_roc_multiclass_cv,
     plot_accuracies,
     plot_roc_aucs,
-    plot_event_durations,
-    plot_event_onsets,
     plot_classifier_performance,
 )
 
@@ -124,7 +123,14 @@ def run_classifier_comparison(
     y = labels[included_trials]
 
     clf_scores = fit_classifiers_cv(
-        X, y, image_height, image_width, cv, metrics, random_state=random_state
+        X,
+        y,
+        image_height,
+        image_width,
+        cv,
+        metrics,
+        n_jobs=-1,
+        random_state=random_state,
     )
 
     return clf_scores
@@ -627,9 +633,7 @@ def time_window_experiment(
 
     subject = bids_path.subject
 
-    destination = (
-        Path(destination_path) / f"trial_specific_window/{domain}_domain/"
-    )
+    destination = Path(destination_path) / f"trial_specific_window/{domain}_domain/"
     if not os.path.exists(destination):
         os.makedirs(destination)
 
@@ -689,7 +693,14 @@ def time_window_experiment(
     y = labels
 
     cv_scores = fit_classifiers_cv(
-        X, y, image_height, image_width, cv, metrics, random_state=random_state
+        X,
+        y,
+        image_height,
+        image_width,
+        cv,
+        metrics,
+        n_jobs=-1,
+        random_state=random_state,
     )
 
     n_repeats = 5  # number of repeats for permutation importance
@@ -698,13 +709,15 @@ def time_window_experiment(
     scores = cv_scores[clf_name]
     best_ind = np.argmax(scores["test_roc_auc_ovr"])
     best_estimator = scores["estimator"][best_ind]
+    best_train_inds = scores["train_inds"][best_ind]
     best_test_inds = scores["test_inds"][best_ind]
 
+    X_train = X[best_train_inds]
+    y_train = y[best_train_inds]
     X_test = X[best_test_inds]
     y_test = y[best_test_inds]
 
     # Run feat importance for roc_auc_ovr
-    print(f"{subject.upper()}: Running feature importances...")
     try:
         scoring_methods = [
             "roc_auc_ovr",
@@ -718,6 +731,18 @@ def time_window_experiment(
             if key_std not in scores:
                 scores[key_std] = []
 
+            mtsmorf = rerfClassifier(
+                projection_matrix="MT-MORF",
+                max_features="auto",
+                n_jobs=-1,
+                random_state=random_state,
+                image_height=image_height,
+                image_width=image_width,
+            )
+
+            mtsmorf.fit(X_train, y_train)
+            
+            print(f"{subject.upper()}: Running feature importances...")
             result = permutation_importance(
                 best_estimator,
                 X_test,
@@ -735,7 +760,7 @@ def time_window_experiment(
 
         cv_scores[clf_name] = scores
     except:
-        print('feat importances failed...')
+        print("feat importances failed...")
         traceback.print_exc()
 
     for clf_name, clf_scores in cv_scores.items():

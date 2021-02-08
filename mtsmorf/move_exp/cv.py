@@ -11,7 +11,9 @@ import pandas as pd
 from mne.decoding import Scaler, Vectorizer
 from mne_bids import BIDSPath
 from sklearn.base import clone
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -26,18 +28,15 @@ from sklearn.model_selection import (
     cross_validate,
     KFold,
     RandomizedSearchCV,
-    TimeSeriesSplit,
 )
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import resample, check_random_state
+from rerf.rerfClassifier import rerfClassifier
 from tqdm import tqdm
-
-# from rerf.rerfClassifier import rerfClassifier
 
 # Hack-y way to import from files in sibling "io" directory
 sys.path.append(str(Path(__file__).parent.parent / "io"))
-
 from read import read_label, read_dataset
 from utils import NumpyEncoder
 
@@ -377,9 +376,6 @@ def bootstrap_fit(
     scores["test_tnr"] = []
     scores["test_confusion_matrix"] = []
 
-    # rng = check_random_state(random_state)
-    # rng.seed(1)
-
     for i in tqdm(range(n_iterations)):
 
         n = len(X)
@@ -418,3 +414,64 @@ def bootstrap_fit(
         scores["test_confusion_matrix"].append(cm.tolist())
 
     return scores
+
+
+def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=None):
+    """Initialize a list of classifiers to be compared."""
+
+    mtsmorf = rerfClassifier(
+        projection_matrix="MT-MORF",
+        max_features="auto",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        image_height=image_height,
+        image_width=image_width,
+    )
+
+    srerf = rerfClassifier(
+        projection_matrix="S-RerF",
+        max_features="auto",
+        n_jobs=n_jobs,
+        random_state=random_state,
+        image_height=image_height,
+        image_width=image_width,
+    )
+
+    lr = LogisticRegression(random_state=random_state)
+    rf = RandomForestClassifier(random_state=random_state)
+    dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
+
+    clfs = [mtsmorf, srerf, lr, rf, dummy]
+
+    return clfs
+
+
+def fit_classifiers_cv(
+    X, y, image_height, image_width, cv, metrics, n_jobs=1, random_state=None
+):
+    """Run cross-validation for classifiers listed in initialize_classifiers()."""
+    clf_scores = dict()
+    clfs = initialize_classifiers(
+        image_height, image_width, n_jobs=n_jobs, random_state=random_state
+    )
+
+    for clf in clfs:
+        if clf.__class__.__name__ == "rerfClassifier":
+            clf_name = clf.get_params()["projection_matrix"]
+        elif clf.__class__.__name__ == "DummyClassifier":
+            clf_name = clf.strategy
+        else:
+            clf_name = clf.__class__.__name__
+
+        clf_scores[clf_name] = cv_fit(
+            clf,
+            X,
+            y,
+            cv=cv,
+            metrics=metrics,
+            n_jobs=None,
+            return_train_score=True,
+            return_estimator=True,
+        )
+
+    return clf_scores

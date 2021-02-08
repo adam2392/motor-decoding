@@ -41,6 +41,28 @@ def get_trial_info(bids_path, verbose=False):
     return behav_tsv, events_tsv
 
 
+def get_trial_info_pd(bids_path, verbose=False):
+    """Convert behav and events OrderedDict objects to pd.DataFrame objects
+    with numerical columns appropriately typed.
+    """
+    behav, events = map(pd.DataFrame, get_trial_info(bids_path, verbose=verbose))
+
+    behav_numerical_cols = [
+        "trial_id",
+        "successful_trial_flag",
+        "missed_target_flag",
+        "correct_speed_flag",
+        "force_angular",
+        "force_magnitude",
+        "target_direction",
+    ]
+    behav[behav_numerical_cols] = behav[behav_numerical_cols].apply(pd.to_numeric)
+
+    events_numerical_cols = ["onset", "duration", "value", "sample"]
+    events[events_numerical_cols] = events[events_numerical_cols].apply(pd.to_numeric)
+    return behav, events
+
+
 def _read_ch_anat(bids_path):
     electrodes_fpath = _find_matching_sidecar(
         bids_path, suffix="channels", extension=".tsv"
@@ -115,6 +137,26 @@ def _get_bad_chs(bids_path):
         ):
             bads.append(ch_name)
     return bads
+
+
+def get_unperturbed_trial_inds(behav):
+    """Get trial indices where force magnitude > 0."""
+    if not isinstance(behav, pd.DataFrame):
+        behav = pd.DataFrame(behav)
+
+    behav[["successful_trial_flag", "force_magnitude"]] = behav[
+        ["successful_trial_flag", "force_magnitude"]
+    ].apply(pd.to_numeric)
+
+    # filter out failed trials -- we don't want these anyway
+    successes = behav[behav.successful_trial_flag == 1]
+    successes.index = np.arange(len(successes))
+
+    # filter out labels for perturbed trials
+    unperturbed_trial_inds = successes[successes.force_magnitude == 0].index
+    unperturbed_trial_inds = unperturbed_trial_inds.to_list()
+
+    return unperturbed_trial_inds
 
 
 def read_trial(bids_path, trial_id, picks=None):
