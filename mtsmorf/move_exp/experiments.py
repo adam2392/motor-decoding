@@ -21,15 +21,14 @@ from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklearn.utils import check_random_state
 
 from cv import cv_roc, cv_fit
-from move_experiment_functions import get_event_data
-from time_window_selection_functions import (
+from functions.move_experiment_functions import get_event_data
+from functions.time_window_selection_functions import (
     fit_classifiers_cv,
     get_event_durations,
     plot_event_durations,
     plot_event_onsets,
 )
 from plotting import (
-    plot_roc_cv,
     plot_roc_multiclass_cv,
     plot_accuracies,
     plot_roc_aucs,
@@ -740,7 +739,7 @@ def time_window_experiment(
                 image_width=image_width,
             )
 
-            mtsmorf.fit(X_train, y_train)
+            mtsmorf.fit(X_test, y_test)  # For some reason need to call this?
             
             print(f"{subject.upper()}: Running feature importances...")
             result = permutation_importance(

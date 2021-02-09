@@ -9,7 +9,7 @@ from ptitprince import PtitPrince as pt
 from sklearn.utils import check_random_state
 
 from cv import fit_classifiers_cv
-from move_experiment_functions import get_preprocessed_labels, get_event_data
+from .move_experiment_functions import get_preprocessed_labels, get_event_data
 
 sys.path.append(str(Path(__file__).parent.parent / "io"))
 

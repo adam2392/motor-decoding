@@ -121,7 +121,7 @@ def _compute_roc_multiclass(y_true, y_score, n_classes):
 
 
 def plot_feature_importances(
-    result, ch_names, times, image_height, image_width, ax=None
+    result, ch_names, times, image_height, image_width, vmin=None, vmax=None, ax=None
 ):
     nchs = len(ch_names)
     nsteps = len(times)
@@ -132,23 +132,26 @@ def plot_feature_importances(
     feat_importance_means = np.array(result["importances_mean"]).reshape(
         image_height, image_width
     )
-    feat_importance_stds = np.array(result["importances_std"]).reshape(
-        image_height, image_width
-    )
 
     df_feat_importances = pd.DataFrame(feat_importance_means)
 
+    if vmin is None:
+        vmin = np.min(feat_importance_means)
+
+    if vmax is None:
+        vmax = np.max(feat_importance_means)
+    
     ax = sns.heatmap(
         df_feat_importances,
-        vmin=np.min(feat_importance_means),
-        vmax=np.max(feat_importance_means),
+        vmin=vmin,
+        vmax=vmax,
         center=0.0,
         cmap=plt.cm.coolwarm,
         yticklabels=ch_names,
         ax=ax,
     )
 
-    time_lock = np.where(times == 0)[0][0]
+    time_lock = (np.abs(times)).argmin()
 
     ax.axvline(time_lock, ls="--")
 
