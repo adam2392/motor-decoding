@@ -4,5 +4,5 @@ bids_root: "/Volumes/Mac/research/data/efri/"
 # path to folder of transformed data
 derivatives_path: "/Users/ChesterHuynh/Johns Hopkins/Adam Li - efri/derivatives/"
 
-# path to folder of results and figures
+# path to a subfolder derivatives_path to store results and figures
 results_path: "/Users/ChesterHuynh/Johns Hopkins/Adam Li - efri/derivatives/workstation_output"

@@ -658,6 +658,7 @@ def time_window_experiment(
             decim=3,
             n_jobs=-1,
         )
+        power.crop(tmin=tmin, tmax=tmax)
         data = power.data
         ntrials, nchs, nfreqs, nsteps = data.shape
         print(f"{subject.upper()}: data.shape = ({data.shape})")
@@ -672,6 +673,7 @@ def time_window_experiment(
         image_width = nsteps
 
     elif domain.lower() == "time":
+        epochs.crop(tmin=tmin, tmax=tmax)
         data = epochs.get_data()
         ntrials, nchs, nsteps = data.shape
         print(f"{subject.upper()}: data.shape = ({data.shape})")
