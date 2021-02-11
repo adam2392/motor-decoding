@@ -23,7 +23,11 @@ colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
 # colors = cycle(['#4477AA', '#EE6677', '#228833', '#CCBB44', '#66CCEE', '#AA3377', '#BBBBBB'])
 # colors = cycle([['EE7733', '0077BB', '33BBEE', 'EE3377', 'CC3311', '009988', 'BBBBBB']])
 
-plt.style.use(["science", "ieee", "no-latex"])
+try:
+    plt.style.use(["science", "ieee", "no-latex"])
+except Exception as e:
+    print(e)
+
 plt.rcParams["font.family"] = "sans-serif"
 
 
