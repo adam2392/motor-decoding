@@ -469,7 +469,7 @@ def fit_classifiers_cv(
             y,
             cv=cv,
             metrics=metrics,
-            n_jobs=None,
+            n_jobs=n_jobs,
             return_train_score=True,
             return_estimator=True,
         )

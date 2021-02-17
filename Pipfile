@@ -18,6 +18,8 @@ joblib = "*"
 tqdm = "*"
 matplotlib = "*"
 seaborn = "*"
+ptitprince = "*"
+dabest = "*"
 
 [requires]
 python_version = "3.8"

@@ -40,3 +40,8 @@ Use `pipenv` with a virtual environment.
     # pip install into venv
     cd ../Python
     pipenv run pip install -e .
+
+## Note on Compiling PackedForest on Macs
+
+It is recommended to use a conda environment and then follow 
+the instructions on the [installation instructions](https://sporf.neurodata.io/install.html).

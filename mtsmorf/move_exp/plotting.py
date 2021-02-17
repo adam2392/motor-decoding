@@ -14,6 +14,7 @@ from sklearn.inspection import permutation_importance
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 from sklearn.utils import check_random_state
+import dabest
 
 label_names = {0: "Down", 1: "Right", 2: "Up", 3: "Left"}
 colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
@@ -23,7 +24,11 @@ colors = cycle(["#26A7FF", "#7828FD", "#FF5126", "#FDF028"])
 # colors = cycle(['#4477AA', '#EE6677', '#228833', '#CCBB44', '#66CCEE', '#AA3377', '#BBBBBB'])
 # colors = cycle([['EE7733', '0077BB', '33BBEE', 'EE3377', 'CC3311', '009988', 'BBBBBB']])
 
-plt.style.use(["science", "ieee", "no-latex"])
+try:
+    plt.style.use(["science", "ieee", "no-latex"])
+except Exception as e:
+    print(e)
+
 plt.rcParams["font.family"] = "sans-serif"
 
 
@@ -37,7 +42,7 @@ def _mean_confidence_interval(data, confidence=0.95):
 
 def _plot_signal(t, data, title="", ax=None, label="", ls="-", **plt_kwargs):
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
     avg_signal, lower_bound, upper_bound = _mean_confidence_interval(data)
 
@@ -78,21 +83,6 @@ def plot_signals(epochs, labels, ncols=4, axs=None):
             ax.legend()
             ax.set(title=f"{ch}", xlabel="Time (s)", ylabel="LFP (mV)")
 
-        # for each class label
-        # for j, label in enumerate(np.unique(labels)):
-        #     if label in [1, 3]:
-        #         continue
-
-        #     _plot_signal(
-        #         t,
-        #         data[labels == label],
-        #         ax=ax,
-        #         label=f"{label_names[label]}",
-        #     )
-
-        #     ax.legend()
-        #     ax.set(title=f"{ch}", xlabel="Time (s)", ylabel="LFP (mV)")
-
     return axs
 
 
@@ -127,7 +117,7 @@ def plot_feature_importances(
     nsteps = len(times)
 
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
     feat_importance_means = np.array(result["importances_mean"]).reshape(
         image_height, image_width
@@ -167,7 +157,7 @@ def plot_feature_importances(
 def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None):
 
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
     fprs = []
     tprs = []
@@ -263,7 +253,7 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=N
 def plot_roc_multiclass_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None):
 
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
     fprs = []
     tprs = []
@@ -407,50 +397,48 @@ def plot_cv_indices(cv, X, y, ax, n_splits, lw=10):
     return ax
 
 
-def plot_accuracies(clf_scores, ax=None):
+def plot_accuracies(clf_scores, ax=None, random_seed=1):
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
-    accs = np.array(
-        [np.mean(scores["test_accuracy"]) for scores in clf_scores.values()]
-    )
-    acc_std = np.array(
-        [np.std(scores["test_accuracy"]) for scores in clf_scores.values()]
-    )
+    id_col = pd.Series(range(1, len(clf_scores)+1))
 
-    ax.errorbar(
-        list(clf_scores.keys()), accs, yerr=acc_std, fmt="o", markersize=8, capsize=15
-    )
-    ax.axhline(
-        np.mean(clf_scores["MT-MORF"]["test_accuracy"]), lw=1, color="k", ls="--"
-    )
+    df = pd.DataFrame({
+        clf_name: scores["test_accuracy"] 
+        for clf_name, scores in clf_scores.items()
+    })
 
+    df["ID"] = id_col
+
+    my_data = dabest.load(df, idx=list(clf_scores.keys()), 
+                        id_col="ID", resamples=100, 
+                        random_seed=random_seed)
+
+    my_data.mean_diff.plot(ax=ax)
+    ax.set(title="Classifier Accuracy Comparison");
     return ax
 
 
-def plot_roc_aucs(clf_scores, ax=None):
+def plot_roc_aucs(clf_scores, ax=None, random_seed=1):
+    
     if ax is None:
-        ax = plt.gca()
+        _, ax = plt.subplots()
 
-    roc_aucs = np.array(
-        [np.mean(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()]
-    )
-    roc_aucs_std = np.array(
-        [np.std(scores["test_roc_auc_ovr"]) for scores in clf_scores.values()]
-    )
+    id_col = pd.Series(range(1, len(clf_scores)+1))
 
-    ax.errorbar(
-        list(clf_scores.keys()),
-        roc_aucs,
-        yerr=roc_aucs_std,
-        fmt="o",
-        markersize=8,
-        capsize=15,
-    )
-    ax.axhline(
-        np.mean(clf_scores["MT-MORF"]["test_roc_auc_ovr"]), lw=1, color="k", ls="--"
-    )
+    df = pd.DataFrame({
+        clf_name: scores["test_roc_auc_ovr"] 
+        for clf_name, scores in clf_scores.items()
+    })
 
+    df["ID"] = id_col
+
+    my_data = dabest.load(df, idx=list(clf_scores.keys()), 
+                        id_col="ID", resamples=100, 
+                        random_seed=random_seed)
+
+    my_data.mean_diff.plot(ax=ax)
+    ax.set(title="Classifier ROC AUC One vs. Rest Comparison");
     return ax
 
 
