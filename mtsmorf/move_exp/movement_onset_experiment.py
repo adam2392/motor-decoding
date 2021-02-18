@@ -8,17 +8,17 @@ import yaml
 
 from mne_bids.path import BIDSPath
 from mne import Epochs
-from mne.time_frequency import AverageTFR, EpochsTFR
+from mne.time_frequency import EpochsTFR
 from mne.time_frequency.tfr import tfr_morlet
 from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold
 
-from cv import cv_fit, fit_classifiers_cv
+from cv import fit_classifiers_cv
 from move_experiment_functions import get_event_data
 from plotting import plot_classifier_performance
 
 
-def _prepare_onset_data(before, after):
+def _prepare_movement_onset_data(before, after):
     """Extract data matrix X and labels y from before and after mne.Epochs
     data structures.
     """
@@ -62,20 +62,25 @@ def movement_onset_experiment(
     cv,
     metrics,
     domain,
+    n_jobs=1,
     random_state=None,
 ):
     """Run classifier comparison in classifying before or after movement onset."""
     subject = bids_path.subject
     destination_path = Path(destination_path)
 
+    # Get data for before movement onset
     before, _ = get_event_data(bids_path, tmin=0, tmax=1.0, event_key="At Center")
     before.load_data()
 
+    # Get data for after movement onset
     after, _ = get_event_data(bids_path, tmin=-0.25, tmax=0.75, event_key="Left Target")
     after.load_data()
 
     if domain == "time":
-        X, y, image_height, image_width = _prepare_onset_data(before, after, domain)
+        X, y, image_height, image_width = _prepare_movement_onset_data(
+            before, after, domain
+        )
     elif domain in ["freq", "frequency"]:
         nfreqs = 10
         lfreq, hfreq = (70, 200)
@@ -89,7 +94,7 @@ def movement_onset_experiment(
             average=False,
             return_itc=False,
             decim=3,
-            n_jobs=1,
+            n_jobs=n_jobs,
         )
         after_power = tfr_morlet(
             after,
@@ -98,9 +103,9 @@ def movement_onset_experiment(
             average=False,
             return_itc=False,
             decim=3,
-            n_jobs=1,
+            n_jobs=n_jobs,
         )
-        X, y, image_height, image_width = _prepare_onset_data(
+        X, y, image_height, image_width = _prepare_movement_onset_data(
             before_power, after_power, domain
         )
     else:
@@ -108,35 +113,41 @@ def movement_onset_experiment(
 
     # Perform K-Fold cross validation
     clf_scores = fit_classifiers_cv(
-        X, y, image_height, image_width, cv, metrics, n_jobs=-1, random_state=seed
+        X,
+        y,
+        image_height,
+        image_width,
+        cv,
+        metrics,
+        n_jobs=n_jobs,
+        random_state=random_state,
     )
 
     ## Plot results
-    # 1. Plot roc curves
     fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
     axs = axs.flatten()
-    axs = plot_classifier_performance(clf_scores, X, y, axs=axs)
-
+    plot_classifier_performance(clf_scores, X, y, axs=axs)
     axs[0].set(
         title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
     )
-
-    # 2. Plot accuracies
     axs[1].set(
         title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
     )
     fig.tight_layout()
 
-    plt.savefig(destination_path / f"movement_onset_{domain}_domain.png")
+    plt.savefig(
+        destination_path / f"{domain}_domain/movement_onset_{domain}_domain.png"
+    )
     plt.close(fig)
-    print(f"Figure saved at {destination_path}/movement_onset_{domain}_domain.png")
+    print(
+        f"Figure saved at {destination_path}/{domain}_domain/movement_onset_{domain}_domain.png"
+    )
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("subject", type=str, help="subject ID (e.g. efri02)")
-
     args = parser.parse_args()
     subject = args.subject
 
@@ -171,8 +182,8 @@ if __name__ == "__main__":
         os.makedirs(destination_path)
 
     movement_onset_experiment(
-        bids_path, destination_path, cv, metrics, random_state=seed
+        bids_path, destination_path, cv, metrics, "time", n_jobs=-1, random_state=seed
     )
     movement_onset_experiment(
-        bids_path, destination_path, cv, metrics, random_state=seed
+        bids_path, destination_path, cv, metrics, "freq", n_jobs=-1, random_state=seed
     )
