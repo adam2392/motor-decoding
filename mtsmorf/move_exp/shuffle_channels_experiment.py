@@ -6,7 +6,7 @@ import yaml
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mne.epochs import Epochs
+from mne import Epochs
 from mne.time_frequency.tfr import EpochsTFR, tfr_morlet
 from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold
@@ -24,12 +24,9 @@ def _prepare_shuffle_channels_data(inst, labels, shuffle, random_state=None):
     """
     rng = check_random_state(random_state)
 
-    ntrials = len(inst)
-    inst.load_data()
-    data = inst.get_data()
-
     if isinstance(inst, Epochs):
         ## Time Domain
+        data = inst.get_data()
         ntrials, nchs, nsteps = data.shape
         image_height = nchs
         image_width = nsteps
@@ -40,6 +37,7 @@ def _prepare_shuffle_channels_data(inst, labels, shuffle, random_state=None):
 
     elif isinstance(inst, EpochsTFR):
         ## Freq Domain
+        data = inst.data
         ntrials, nchs, nfreqs, nsteps = data.shape
         image_height = nchs * nfreqs
         image_width = nsteps
@@ -50,6 +48,9 @@ def _prepare_shuffle_channels_data(inst, labels, shuffle, random_state=None):
 
             # Need to do this to shuffle two axes simultaneously
             data = data[:, ch_inds, :, :][:, :, freq_inds, :]
+
+    else:
+        raise TypeError("inst is not an Epochs or EpochsTFR instance.")
 
     X = data.reshape(ntrials, -1)
     y = labels

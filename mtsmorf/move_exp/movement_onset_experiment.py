@@ -20,13 +20,31 @@ from plotting import plot_classifier_performance
 
 def _prepare_movement_onset_data(before, after):
     """Extract data matrix X and labels y from before and after mne.Epochs
-    data structures.
+    or mne.EpochsTFR data structures.
     """
-    before.load_data()
-    before_data = before.get_data()
 
-    after.load_data()
-    after_data = after.get_data()
+    if isinstance(before, Epochs) and isinstance(after, Epochs):
+        ## Time Domain
+        before_data = before.get_data()
+        after_data = after.get_data()
+
+        ntrials, nchs, nsteps = before_data.shape
+        image_height = nchs
+        image_width = nsteps
+
+    elif isinstance(before, EpochsTFR) and isinstance(after, EpochsTFR):
+        ## Freq Domain
+        before_data = before.data
+        after_data = after.data
+
+        ntrials, nchs, nfreqs, nsteps = before_data.shape
+        image_height = nchs * nfreqs
+        image_width = nsteps
+
+    else:
+        raise TypeError(
+            "Either before and after both must be either Epochs or EpochsTFR."
+        )
 
     ntrials = len(before)
     X = np.vstack(
@@ -36,22 +54,7 @@ def _prepare_movement_onset_data(before, after):
         ]
     )
     y = np.concatenate([np.zeros(ntrials), np.ones(ntrials)])
-    assert X.shape[0] == y.shape[0], "X and y do not have the same number of epochs"
-
-    if isinstance(before, Epochs) and isinstance(after, Epochs):
-        ## Time Domain
-        ntrials, nchs, nsteps = before_data.shape
-        image_height = nchs
-        image_width = nsteps
-
-    elif isinstance(before, EpochsTFR) and isinstance(after, EpochsTFR):
-        ## Freq Domain
-        ntrials, nchs, nfreqs, nsteps = before_data.shape
-        image_height = nchs * nfreqs
-        image_width = nsteps
-
-    else:
-        raise TypeError("Either before or after are not Epochs or EpochsTFR.")
+    assert X.shape[0] == y.shape[0], "X and y do not have the same number of trials"
 
     return X, y, image_height, image_width
 
@@ -67,7 +70,7 @@ def movement_onset_experiment(
 ):
     """Run classifier comparison in classifying before or after movement onset."""
     subject = bids_path.subject
-    destination_path = Path(destination_path)
+    destination = Path(destination_path)
 
     # Get data for before movement onset
     before, _ = get_event_data(bids_path, tmin=0, tmax=1.0, event_key="At Center")
@@ -135,12 +138,10 @@ def movement_onset_experiment(
     )
     fig.tight_layout()
 
-    plt.savefig(
-        destination_path / f"{domain}_domain/movement_onset_{domain}_domain.png"
-    )
+    plt.savefig(destination / f"{domain}_domain/movement_onset_{domain}_domain.png")
     plt.close(fig)
     print(
-        f"Figure saved at {destination_path}/{domain}_domain/movement_onset_{domain}_domain.png"
+        f"Figure saved at {destination}/{domain}_domain/movement_onset_{domain}_domain.png"
     )
 
 
