@@ -18,7 +18,6 @@ from tqdm import tqdm
 
 # Hack-y way to import from files in sibling "io" directory
 sys.path.append(str(Path(__file__).parent.parent / "io"))
-sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
 
 from read import read_dataset, read_label, read_trial, get_trial_info
 from plotting import (

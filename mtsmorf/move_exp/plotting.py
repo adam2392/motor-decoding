@@ -333,6 +333,14 @@ def plot_roc_multiclass_cv(y_pred_probas, X, y, test_inds, label="", show_chance
     if show_chance:
         ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.8)
 
+    ax.set(
+        xlabel="False Positive Rate",
+        ylabel="True Positive Rate",
+        xlim=[-0.05, 1.05],
+        ylim=[-0.05, 1.05],
+    )
+    ax.legend(loc="lower right")
+
     return ax
 
 
@@ -415,7 +423,9 @@ def plot_accuracies(clf_scores, ax=None, random_seed=1):
                         random_seed=random_seed)
 
     my_data.mean_diff.plot(ax=ax)
-    ax.set(title="Classifier Accuracy Comparison");
+    ax.set(
+        title="Classifier Accuracy Comparison",
+    );
     return ax
 
 
