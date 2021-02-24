@@ -422,7 +422,7 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     mtsmorf = rerfClassifier(
         projection_matrix="MT-MORF",
         max_features="auto",
-        n_jobs=n_jobs,
+        n_jobs=-1,
         random_state=random_state,
         image_height=image_height,
         image_width=image_width,
@@ -431,7 +431,7 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     srerf = rerfClassifier(
         projection_matrix="S-RerF",
         max_features="auto",
-        n_jobs=n_jobs,
+        n_jobs=-1,
         random_state=random_state,
         image_height=image_height,
         image_width=image_width,
