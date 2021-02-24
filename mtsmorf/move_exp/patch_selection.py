@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from rerf.rerfClassifier import rerfClassifier
 from sklearn.metrics import check_scoring
 from sklearn.model_selection import train_test_split
@@ -34,12 +35,10 @@ def _calculate_permutation_scores(estimator, X, y, sample_weight, patch_idx,
     for n_round in range(n_repeats):
         random_state.shuffle(shuffling_idx)
         if hasattr(X_permuted, "iloc"):
-            # TODO: test on .iloc
-            col = X_permuted.iloc[shuffling_idx, patch_idx]
-            col.index = X_permuted.index
-            X_permuted.iloc[:, col_idx] = col
+            patch = X_permuted.iloc[shuffling_idx, patch_idx]
+            patch.index = X_permuted.index
+            X_permuted.iloc[:, patch_idx] = patch
         else:
-            # TODO: verify this is what I want it to do
             X_permuted[:, patch_idx] = X_permuted[shuffling_idx][:, patch_idx]
         feature_score = _weights_scorer(
             scorer, estimator, X_permuted, y, sample_weight
@@ -173,7 +172,7 @@ if __name__ == "__main__":
     n = 50
     image_height, image_width = 10, 20
     class0 = np.random.randn(n // 2, image_height, image_width)
-    class1 = np.random.randn(n // 2, image_height, image_width) + 1
+    class1 = np.random.randn(n // 2, image_height, image_width) + 2e-1
 
     data = np.vstack([class0, class1])
     labels = np.vstack([np.zeros((n // 2, 1)), np.ones((n // 2, 1))])
@@ -188,7 +187,7 @@ if __name__ == "__main__":
     clf.fit(X_train, y_train)
 
     result = patch_selection(clf, X_test, y_test, image_height, image_width, 
-                             patch_width=5, scoring="accuracy", n_jobs=-1, 
+                             patch_width=5, scoring="roc_auc", n_jobs=-1, 
                              random_state=1)
 
     print("done")
