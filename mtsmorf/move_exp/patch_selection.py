@@ -102,13 +102,13 @@ def patch_selection(estimator, X, y, image_height, image_width, *, patch_height=
     -------
     result : :class:`~sklearn.utils.Bunch`
         Dictionary-like object, with the following attributes.
-        importances_mean : ndarray, shape (n_features, )
+        importances_mean : ndarray, shape (n_patches, )
             Mean of feature importance over `n_repeats`.
-        importances_std : ndarray, shape (n_features, )
+        importances_std : ndarray, shape (n_patches, )
             Standard deviation over `n_repeats`.
-        importances : ndarray, shape (n_features, n_repeats)
+        importances : ndarray, shape (n_patches, n_repeats)
             Raw permutation importance scores.
-        patches : ndarray, shape (n_patches, patch_height, patch_width)
+        patch_inds : ndarray, shape (n_patches, patch_height, patch_width)
             Indices for all patches used for importances.
     References
     ----------
@@ -134,15 +134,15 @@ def patch_selection(estimator, X, y, image_height, image_width, *, patch_height=
     patch_row_idx = np.arange(0, image_height, patch_height)
     patch_col_idx = np.arange(0, image_width, patch_width)
 
-    patches = [
-        [
+    patches = np.array([
+        np.array([
             _compute_vectorized_index(r, c, image_width)
             for r in np.arange(row_start, min(image_height, row_start + patch_height))
             for c in np.arange(col_start, min(image_width, col_start + patch_width))
-        ] 
+        ])
         for row_start in patch_row_idx
         for col_start in patch_col_idx
-    ]
+    ])
 
     scores = Parallel(n_jobs=n_jobs)(delayed(_calculate_permutation_scores)(
             estimator, X, y, sample_weight, patch, random_seed, n_repeats, scorer
@@ -152,7 +152,7 @@ def patch_selection(estimator, X, y, image_height, image_width, *, patch_height=
     return Bunch(importances_mean=np.mean(importances, axis=1),
                  importances_std=np.std(importances, axis=1),
                  importances=importances,
-                 patches=patches)
+                 patch_inds=patches)
 
 
 def randomized_patch_selection(estimator, X, y, image_height, image_width, *, 
@@ -211,13 +211,13 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
     -------
     result : :class:`~sklearn.utils.Bunch`
         Dictionary-like object, with the following attributes.
-        importances_mean : ndarray, shape (n_features, )
+        importances_mean : ndarray, shape (n_patches, )
             Mean of feature importance over `n_repeats`.
-        importances_std : ndarray, shape (n_features, )
+        importances_std : ndarray, shape (n_patches, )
             Standard deviation over `n_repeats`.
-        importances : ndarray, shape (n_features, n_repeats)
+        importances : ndarray, shape (n_patches, n_repeats)
             Raw permutation importance scores.
-        patches : ndarray, shape (n_patches, patch_height, patch_width)
+        patch_inds : ndarray, shape (n_patches, patch_height, patch_width)
             Indices for all patches used for importances.
     References
     ----------
@@ -260,15 +260,15 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
     ]
     
     # Create a meshgrid for all indices
-    patches = [
-        [
+    patches = np.array([
+        np.array([
             _compute_vectorized_index(r, c, image_width)
             for r in rows
             for c in cols
-        ]
+        ])
         for rows in patch_rows
         for cols in patch_cols
-    ]
+    ])
 
     scores = Parallel(n_jobs=n_jobs)(delayed(_calculate_permutation_scores)(
             estimator, X, y, sample_weight, patch, random_seed, n_repeats, scorer
@@ -278,35 +278,4 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
     return Bunch(importances_mean=np.mean(importances, axis=1),
                  importances_std=np.std(importances, axis=1),
                  importances=importances,
-                 patches=patches)
-
-
-if __name__ == "__main__":
-    np.random.seed(1)
-
-    n = 50
-    image_height, image_width = 10, 20
-    class0 = np.random.randn(n // 2, image_height, image_width)
-    class1 = np.random.randn(n // 2, image_height, image_width) + 2e-1
-
-    data = np.vstack([class0, class1])
-    labels = np.vstack([np.zeros((n // 2, 1)), np.ones((n // 2, 1))])
-
-    shuffle_idx = np.random.choice(n, size=n, replace=False)
-    X = data[shuffle_idx].reshape(n, -1)
-    y = np.squeeze(labels[shuffle_idx])
-    X_train, X_test, y_train, y_test = train_test_split(X, y)
-
-    clf = rerfClassifier(projection_matrix="MT-MORF", n_jobs=-1, random_state=1,
-                         image_height=image_height, image_width=image_width)
-    clf.fit(X_train, y_train)
-
-    result = patch_selection(clf, X_test, y_test, image_height, image_width, 
-                             patch_width=5, patch_height=5, scoring="roc_auc",
-                             random_state=1)
-
-    result = randomized_patch_selection(clf, X_test, y_test, image_height, 
-                                        image_width, patch_width=5, patch_height=5, 
-                                        scoring="roc_auc", random_state=1)
-
-    print("done")
+                 patch_inds=patches)
