@@ -422,7 +422,7 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     mtsmorf = rerfClassifier(
         projection_matrix="MT-MORF",
         max_features="auto",
-        n_jobs=n_jobs,
+        n_jobs=-1,
         random_state=random_state,
         image_height=image_height,
         image_width=image_width,
@@ -431,7 +431,7 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     srerf = rerfClassifier(
         projection_matrix="S-RerF",
         max_features="auto",
-        n_jobs=n_jobs,
+        n_jobs=-1,
         random_state=random_state,
         image_height=image_height,
         image_width=image_width,
@@ -446,6 +446,18 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     return clfs
 
 
+def _get_classifier_name(clf):
+    """Get the classifier name based on class type."""
+    if isinstance(clf, rerfClassifier):
+        clf_name = clf.get_params()["projection_matrix"]
+    elif isinstance(clf, DummyClassifier):
+        clf_name = clf.strategy
+    else:
+        clf_name = clf.__class__.__name__
+
+    return clf_name
+
+
 def fit_classifiers_cv(
     X, y, image_height, image_width, cv, metrics, n_jobs=1, random_state=None
 ):
@@ -456,20 +468,14 @@ def fit_classifiers_cv(
     )
 
     for clf in clfs:
-        if clf.__class__.__name__ == "rerfClassifier":
-            clf_name = clf.get_params()["projection_matrix"]
-        elif clf.__class__.__name__ == "DummyClassifier":
-            clf_name = clf.strategy
-        else:
-            clf_name = clf.__class__.__name__
-
+        clf_name = _get_classifier_name(clf)
         clf_scores[clf_name] = cv_fit(
             clf,
             X,
             y,
             cv=cv,
             metrics=metrics,
-            n_jobs=None,
+            n_jobs=n_jobs,
             return_train_score=True,
             return_estimator=True,
         )

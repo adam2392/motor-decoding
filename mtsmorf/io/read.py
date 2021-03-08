@@ -254,6 +254,7 @@ def read_dataset(
     tmin=-0.2,
     tmax=0.5,
     event_key="show card",
+    notch_filter=True,
     verbose=True,
 ):
     """Read entire dataset as an Epoch."""
@@ -269,9 +270,10 @@ def read_dataset(
     raw = raw.pick_types(meg=False, seeg=True)
 
     # filter 60 Hz and harmonics
-    raw.load_data()
-    fs = raw.info["sfreq"]
-    raw = raw.notch_filter(np.arange(60, fs / 2, 60))
+    if notch_filter:
+        raw.load_data()
+        fs = raw.info["sfreq"]
+        raw = raw.notch_filter(np.arange(60, fs / 2, 60))
 
     # get the events and events id structure
     events, event_id = mne.events_from_annotations(raw, verbose=verbose)
