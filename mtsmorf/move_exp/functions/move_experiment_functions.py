@@ -1,21 +1,9 @@
 import sys
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-import statsmodels.api as sm
-
-from rerf.rerfClassifier import rerfClassifier
-from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.utils import check_random_state
-
-from cv import cv_roc, cv_fit
-
 sys.path.append(str(Path(__file__).parent.parent / "io"))
 
-from read import get_trial_info_pd, get_unperturbed_trial_inds, read_label, read_dataset
+from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds, read_label, read_dataset
 
 
 def _preprocess_epochs(epochs, resample_rate=500):
@@ -34,11 +22,11 @@ def _preprocess_epochs(epochs, resample_rate=500):
 
 
 def get_preprocessed_epochs(
-    bids_path,
-    kind="ieeg",
-    tmin=-0.2,
-    tmax=0.5,
-    event_key="Left Target",
+        bids_path,
+        kind="ieeg",
+        tmin=-0.2,
+        tmax=0.5,
+        event_key="Left Target",
 ):
     """Preprocess mne.Epochs object and drop perturbed trials."""
     # Grab original epochs structure
@@ -62,7 +50,7 @@ def get_preprocessed_epochs(
 
 
 def get_preprocessed_labels(
-    bids_path, trial_id=None, label_keyword="target_direction", verbose=False
+        bids_path, trial_id=None, label_keyword="target_direction", verbose=False
 ):
     """Read labels for each trial for the specified keyword. Keep labels for
     successful and unperturbed trials.
@@ -78,13 +66,13 @@ def get_preprocessed_labels(
 
 
 def get_event_data(
-    bids_path,
-    kind="ieeg",
-    tmin=-0.2,
-    tmax=0.5,
-    event_key="Left Target",
-    trial_id=None,
-    label_keyword="target_direction",
+        bids_path,
+        kind="ieeg",
+        tmin=-0.2,
+        tmax=0.5,
+        event_key="Left Target",
+        trial_id=None,
+        label_keyword="target_direction",
 ):
     """Read preprocessed mne.Epochs data structure time locked to label_keyword
     with corresponding trial information.
