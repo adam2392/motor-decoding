@@ -10,9 +10,9 @@ import mne
 import numpy as np
 import pandas as pd
 import scipy.io
-from mne_bids import make_bids_folders
 from mne_bids.tsv_handler import _to_tsv, _from_tsv
-from mne_bids.utils import _parse_bids_filename, _write_json, _find_matching_sidecar
+from mne_bids.utils import _write_json
+from mne_bids import get_entities_from_fname, BIDSPath
 
 
 class MatReader:
@@ -137,7 +137,7 @@ def _get_setup_fname(fname) -> str:
     return str(fname).replace("Raw", "Setup")
 
 
-def get_xy_fname(fname) -> str:
+def _get_xy_fname(fname) -> str:
     return str(fname).replace("Raw", "XY")
 
 
@@ -292,7 +292,7 @@ def _create_coordsystem_json(fname, coordsystem_name, unit="mm"):
     _write_json(fname, fid_json, True, True)
 
 
-def _create_electrodes_tsv(source_fpath, bids_basename, bids_root):
+def _create_electrodes_tsv(source_fpath, bids_path):
     # load in setup.mat via scipy
     try:
         setup_dict = scipy.io.loadmat(_get_setup_fname(source_fpath))
@@ -312,18 +312,11 @@ def _create_electrodes_tsv(source_fpath, bids_basename, bids_root):
     print("channel anatomy: ", ch_anat[0:5])
 
     # create behavior tsv and json sidecar files
-    params = _parse_bids_filename(bids_basename, False)
-    acquisition = params["acq"]
-    if acquisition in ["seeg", "ecog"]:
-        kind = "ieeg"
-    datadir = make_bids_folders(
-        subject=params["sub"],
-        session=params["ses"],
-        kind=kind,
-        bids_root=bids_root,
-        make_dir=False,
-    )
-    electrodes_fpath = os.path.join(datadir, bids_basename + "_electrodes.tsv")
+    electrodes_fpath = BIDSPath(subject=bids_path.subject, session=bids_path.session,
+                                acquisition=bids_path.acquisition,
+                                suffix='electrodes', extension='.tsv',
+                                root=bids_path.root,
+                                datatype=bids_path.datatype)
 
     x = ["n/a"] * len(ch_anat)
     y = ["n/a"] * len(ch_anat)
@@ -343,12 +336,12 @@ def _create_electrodes_tsv(source_fpath, bids_basename, bids_root):
     _to_tsv(data, electrodes_fpath)
 
     # create accompanying coord system
-    fname = electrodes_fpath.replace("electrodes", "coordsystem").replace("tsv", "json")
+    fname = electrodes_fpath.copy().update(suffix="coordsystem", extension="json")
     coordsystem_name = "ras"
     _create_coordsystem_json(fname, coordsystem_name, unit="mm")
 
 
-def _append_anat_to_channels(source_fpath, bids_basename, bids_root):
+def _append_anat_to_channels(source_fpath, bids_path):
     # load in setup.mat via scipy
     try:
         setup_dict = scipy.io.loadmat(_get_setup_fname(source_fpath))
@@ -368,9 +361,7 @@ def _append_anat_to_channels(source_fpath, bids_basename, bids_root):
     print("channel anatomy: ", ch_anat[0:5])
 
     # append anatomy to channels tsv
-    channels_fpath = _find_matching_sidecar(
-        bids_basename, bids_root, suffix="channels.tsv"
-    )
+    channels_fpath = bids_path.copy().udpate(suffix="channels", extension=".tsv")
     channels_tsv = _from_tsv(channels_fpath)
     channels_tsv["anat"] = ch_anat
     _to_tsv(channels_tsv, channels_fpath)
@@ -533,17 +524,20 @@ def _convert_trial_info_war(source_fpath, bids_basename, bids_root, raw):
     return raw
 
 
-def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
+def _convert_trial_info_move(source_fpath, bids_path, raw=None):
+    setup_src_fpath = _get_setup_fname(source_fpath)
+    xy_src_fpath = _get_xy_fname(source_fpath)
+
     # load in setup.mat via scipy
     try:
-        setup_dict = scipy.io.loadmat(_get_setup_fname(source_fpath))
+        setup_dict = scipy.io.loadmat(setup_src_fpath)
     except Exception as e:
         # setup_dict = mat73.loadmat(_get_setup_fname(source_fpath))
         # finally:
         print("Using hdf to read...")
         # setup_dict = read_matlab(_get_setup_fname(source_fpath))
         loader = MatReader()
-        setup_dict = loader.loadmat(_get_setup_fname(source_fpath))
+        setup_dict = loader.loadmat(setup_src_fpath)
 
     # lambda function to flatten out matlab structureees
     flatten = lambda l: np.array([item for sublist in l for item in sublist]).squeeze()
@@ -560,10 +554,8 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
     onset_times = _convert_to_list(setup_dict["trial_times"])
     event_ids = _convert_to_list(setup_dict["trial_words"])
     # map trial words to description
-    params = _parse_bids_filename(bids_basename, False)
-    task = params["task"]
-    source_dir = os.path.join(bids_root, "sourcedata")
-    descriptions = _map_trial_words_to_description(event_ids, task, source_dir)
+    source_dir = os.path.join(bids_path.root, "sourcedata")
+    descriptions = _map_trial_words_to_description(event_ids, bids_path.task, source_dir)
 
     if any(len(onset_times) != len(x) for x in [event_ids, descriptions]):
         raise RuntimeError(
@@ -578,6 +570,8 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
     nrt = flatten(event_filters["nRT"])
     rrt = flatten(event_filters["rRT"])
     missed_target = flatten(event_filters["MissedTarget"])
+    speed_instruction = flatten(event_filters['SpeedInst'])
+    speed_ratio = flatten(event_filters['SpeedRatio'])
     correct_speed = flatten(event_filters["CorrectSpeed"])
     force_ang = flatten(event_filters["Force_Ang"])
     force_mag = flatten(event_filters["Force_Mag"])
@@ -593,6 +587,8 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
             nrt,
             rrt,
             missed_target,
+            speed_instruction,
+            speed_ratio,
             correct_speed,
             force_ang,
             force_mag,
@@ -614,19 +610,8 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
     print(x_pos[0:5], y_pos[0:5])
 
     # create behavior tsv and json sidecar files
-    params = _parse_bids_filename(bids_basename, False)
-    acquisition = params["acq"]
-    if acquisition in ["seeg", "ecog"]:
-        kind = "ieeg"
-    datadir = make_bids_folders(
-        subject=params["sub"],
-        session=params["ses"],
-        kind=kind,
-        bids_root=bids_root,
-        make_dir=True,
-        overwrite=False,
-    )
-    behavior_fname = os.path.join(datadir, bids_basename + "_behav.tsv")
+    behavior_fname = bids_path.copy().update(
+        suffix='beh', extension='.tsv', check=False)
 
     kwargs = collections.OrderedDict(
         {
@@ -636,6 +621,8 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
             "n_reaction_time": nrt,
             "r_reaction_time": rrt,
             "missed_target_flag": missed_target,
+            'speed_instruction': speed_instruction,
+            'speed_ratio': speed_ratio,
             "correct_speed_flag": correct_speed,
             "force_angular": force_ang,
             "force_magnitude": force_mag,
@@ -651,6 +638,8 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
         "n reaction time of subject to make bet",
         "r reaction time of subject to make bet",
         "if subject missed target",
+        'speed instruction (fast, or slow)',
+        'speed ratio (not sure yet)',
         "if subject reached correct speed",
         "angular force",
         "magnitude of force",
@@ -658,7 +647,7 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
         "x position of goal",
         "y position of goal",
     ]
-    _create_behavior_tsv(behavior_fname, behav_descriptions, **kwargs)
+    _create_behavior_tsv(str(behavior_fname.fpath), behav_descriptions, **kwargs)
 
     # compute durations
     durations = [0] * len(onset_times)
@@ -667,9 +656,10 @@ def _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw):
     my_annot = mne.Annotations(
         onset=onset_times, duration=durations, description=descriptions
     )
-    raw.set_annotations(my_annot)
+    if raw is not None:
+        raw.set_annotations(my_annot)
 
-    # determine channel types
-    raw = _set_channel_types(raw, False)
+        # determine channel types
+        raw = _set_channel_types(raw, False)
 
-    return raw
+        return raw

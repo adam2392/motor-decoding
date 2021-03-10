@@ -6,14 +6,16 @@ sys.path.append(str(Path(__file__).parent.parent / "io"))
 from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds, read_label, read_dataset
 
 
-def _preprocess_epochs(epochs, resample_rate=500):
+def _preprocess_epochs(epochs, resample_rate=500, l_freq=1, h_freq=None):
     """Preprocess mne.Epochs object in the following way:
     1. Low-pass filter up to Nyquist frequency
     2. Downsample data to 500 Hz
     """
-    # Low-pass filter up to sfreq/2
     fs = epochs.info["sfreq"]
-    new_epochs = epochs.filter(l_freq=1, h_freq=fs / 2 - 1)
+    if h_freq is None:
+        h_freq = fs / 2 - 1
+    # Low-pass filter up to sfreq/2
+    new_epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
 
     # Downsample epochs to 500 Hz
     new_epochs = new_epochs.resample(resample_rate)
