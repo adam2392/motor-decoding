@@ -7,49 +7,105 @@ from pprint import pprint
 from typing import Union
 
 import mne
-from mne_bids import make_bids_basename, write_raw_bids
+from mne_bids import BIDSPath, write_raw_bids
+from mne_bids.sidecar_updates import _write_json
 from natsort import natsorted
 from tqdm import tqdm
-
-# from mtsmorf.io.bids_conversion import (
-#     _convert_mat_to_raw,
-#     _convert_trial_info_war,
-#     _create_electrodes_tsv,
-#     _convert_trial_info_move,
-#     _append_anat_to_channels,
-# )
-from bids_conversion import (
+import scipy
+from mtsmorf.io.bids_conversion import (
     _convert_mat_to_raw,
     _convert_trial_info_war,
     _create_electrodes_tsv,
     _convert_trial_info_move,
     _append_anat_to_channels,
+    _get_setup_fname, _get_misc_fname, _get_xy_fname,
+    read_matlab, MatReader
 )
 
 # from mtsmorf.io.utils import append_original_fname_to_scans
-from utils import append_original_fname_to_scans
+from mtsmorf.io.utils import append_original_fname_to_scans
 
 logger = logging.getLogger(__name__)
 
 
+def convert_behav_to_bids(bids_path, source_fpath):
+    setup_src_fpath = _get_setup_fname(source_fpath)
+    xy_src_fpath = _get_xy_fname(source_fpath)
+
+    # create behavioral tsv files from the data
+    if task == "war":
+        bids_basename = bids_path.basename
+        _convert_trial_info_war(source_fpath, bids_basename, bids_root)
+    elif task == "move":
+        _convert_trial_info_move(source_fpath, bids_path)
+
+    # read in the XY data
+    xy_dict = read_matlab(xy_src_fpath)
+
+    # create raw array
+    ch_names = ['x', 'y']
+    xy_data = xy_dict["XYdata"]
+    sfreq = xy_dict["Fs"]
+    if xy_data.shape[1] == len(ch_names):
+        xy_data = xy_data.T
+
+    # get the raw Array
+    info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types="misc")
+    raw = mne.io.RawArray(xy_data, info=info)
+
+    # set a measurement date to allow anonymization to run
+    # raw.set_meas_date(meas_date=datetime.datetime.now(tz=datetime.timezone.utc))
+    # mne.io.anonymize_info(raw.info)
+    raw.info["line_freq"] = None
+
+    # save the raw file
+    behav_xy_fpath = bids_path.copy().update(
+        recording='xy',
+        suffix='physio',
+        extension='.tsv.gz',
+        check=False
+    )
+    # save as tsv
+    behav_df = raw.to_data_frame(index='time', scalings={})
+
+    behav_sidecar = behav_xy_fpath.copy().update(
+        extension='.json'
+    )
+    behav_json = {
+        'SamplingFrequency': raw.info['sfreq'],
+        'StartTime': 0,
+        'Columns': ['x', 'y'],
+        'x': {
+            'Units': 'mm',
+        },
+        'y': {
+            'Units': 'mm',
+        }
+    }
+    behav_df.to_csv(behav_xy_fpath,
+                    index=None,
+                    compression='gzip',
+                    sep='\t')
+
+    _write_json(behav_sidecar, behav_json, overwrite=True)
+
 def convert_mat_to_bids(
-    bids_root: Union[str, os.PathLike],
-    bids_basename: str,
+    bids_path,
     source_fpath: Union[str, os.PathLike],
     overwrite=True,
     verbose=False,
 ) -> str:
     """Run Bids conversion pipeline given filepaths."""
-    print("Converting ", source_fpath, "to ", bids_basename)
+    print("Converting ", source_fpath, "to ", bids_path)
 
     # handle conversion to raw Array
-    # raw = _convert_mat_to_raw(source_fpath)
-    # raw = None
+    raw = _convert_mat_to_raw(source_fpath)
+    raw = None
     # add trial info and save it
-    # if task == "war":
-    #     raw = _convert_trial_info_war(source_fpath, bids_basename, bids_root, raw)
-    # elif task == "move":
-    #     raw = _convert_trial_info_move(source_fpath, bids_basename, bids_root, raw)
+    if task == "war":
+        raw = _convert_trial_info_war(source_fpath, bids_path, bids_root, raw)
+    elif task == "move":
+        raw = _convert_trial_info_move(source_fpath, bids_path=bids_path, raw=raw)
 
     # create electrodes tsv file with anatomy
     # _create_electrodes_tsv(source_fpath, bids_basename, bids_root)
@@ -78,7 +134,7 @@ def convert_mat_to_bids(
     #     )
 
     # append data to channels.tsv
-    _append_anat_to_channels(source_fpath, bids_basename, bids_root)
+    # _append_anat_to_channels(source_fpath, bids_path)
 
     return bids_root
 
@@ -94,9 +150,9 @@ def _main(
 
     # set BIDS kind based on acquistion
     if acquisition in ["ecog", "seeg", "ieeg"]:
-        kind = "ieeg"
+        datatype = "ieeg"
     elif acquisition in ["eeg"]:
-        kind = "eeg"
+        datatype = "eeg"
 
     # go through each subject
     for subject in subject_ids:
@@ -120,41 +176,35 @@ def _main(
         # run BIDs conversion for each separate dataset
         for run_id, fpath in enumerate(tqdm(natsorted(rawfiles)), start=1):
             logger.info(f"Running run id: {run_id}, with filepath: {fpath}")
-            bids_basename = make_bids_basename(
-                subject, session, task, acquisition, run_id
+            bids_path = BIDSPath(
+                subject=subject, session=session, task=task, acquisition=acquisition, run=run_id,
+                suffix=datatype, datatype=datatype, extension='.vhdr',
+                root=bids_root
             )
-            bids_fname = bids_basename + f"_{kind}.vhdr"
-
             # if any(bids_basename in x.name for x in subj_dir.rglob("*.vhdr")):
             #     continue
 
             # convert mat raw data into BIDs
-            convert_mat_to_bids(bids_root, bids_basename, fpath, overwrite=True)
+            # convert_mat_to_bids(bids_path, fpath, overwrite=True)
+
+            # convert and store the bhariovial tsv
+            convert_behav_to_bids(bids_path, source_fpath=fpath)
 
             # append scans original filenames
-            append_original_fname_to_scans(
-                os.path.basename(fpath), bids_root, bids_fname
-            )
+            # append_original_fname_to_scans(
+            #     os.path.basename(fpath), bids_root, bids_fname
+            # )
 
         # break
 
 
 if __name__ == "__main__":
     # bids root to write BIDS data to
-    bids_root = Path("/Users/adam2392/Downloads/vns_epilepsy/")
-    bids_root = Path("/Users/adam2392/Dropbox/efri/")
+    # bids_root = Path("/Users/adam2392/Dropbox/efri/")
+    bids_root = Path('/Users/adam2392/OneDrive - Johns Hopkins/efri/')
     # bids_root = Path("/home/adam2392/hdd2/epilepsy_bids/")
 
     # path to excel layout file - would be changed to the datasheet locally
-    excel_fpath = Path("/Users/patrick/Downloads/clinical_data_summary.xlsx")
-    excel_fpath = Path(
-        "/Users/adam2392/Dropbox/epilepsy_bids/organized_clinical_datasheet_raw.xlsx"
-    )
-    # excel_fpath = Path(
-    #     "/home/adam2392/hdd2/epilepsy_bids/organized_clinical_datasheet_raw.xlsx"
-    # )
-    # excel_fpath = Path("/Users/ChesterHuynh/OneDrive - Johns Hopkins/research/data/")
-
     # define BIDS identifiers
     acquisition = "seeg"
     task = "move"
@@ -172,9 +222,9 @@ if __name__ == "__main__":
             if x.is_dir()
         ]
     )
-    # subject_ids = [
-    #     # "pt17"
-    # ]
+    subject_ids = [
+        'efri07'
+    ]
     print(subject_ids)
 
     # run main bids conversion
