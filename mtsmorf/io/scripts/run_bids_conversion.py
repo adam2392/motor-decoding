@@ -222,9 +222,9 @@ if __name__ == "__main__":
             if x.is_dir()
         ]
     )
-    subject_ids = [
-        'efri07'
-    ]
+    # subject_ids = [
+    #     'efri07'
+    # ]
     print(subject_ids)
 
     # run main bids conversion

@@ -223,7 +223,7 @@ def compute_xy_metrics(raw, event_key_start, event_key_end,
     # epochs.drop(drop_inds, reason='unsuccessful, or perturbation')
 
 
-def read_behav_xy_coords(root, subject):
+def read_behav_xy_coords(root, subject, run='01'):
     """Read in xy coordinates for EFRI move task.
 
     Note this data is sampled at the same rate as the
@@ -245,7 +245,6 @@ def read_behav_xy_coords(root, subject):
     """
     session = "efri"
     task = "move"
-    run = "01"
     recording = "xy"
     acquisition = "seeg"
     datatype = "ieeg"
@@ -302,7 +301,7 @@ def read_behav_xy_coords(root, subject):
     return raw
 
 
-def read_trial_metadata(root, subject):
+def read_trial_metadata(root, subject, run='01'):
     """Read EFRI move trial behavioral metadata.
 
     Note: assumes that only 1 dataset ``run``
@@ -322,7 +321,6 @@ def read_trial_metadata(root, subject):
     """
     session = "efri"
     task = "move"
-    run = "01"
     acquisition = "seeg"
     datatype = "ieeg"
     extension = '.tsv'
@@ -376,7 +374,7 @@ def read_trial_metadata(root, subject):
     return trials_metadata
 
 
-def read_move_trial_epochs(root, subject,
+def read_move_trial_epochs(root, subject, run='01',
                            event_key: str = 'Left Target',
                            l_freq: float = 1.,
                            h_freq: float = None,
@@ -456,7 +454,6 @@ def read_move_trial_epochs(root, subject,
     acquisition = 'seeg'
     datatype = 'ieeg'
     extension = '.vhdr'
-    run = '01'  # default run (only one per task)
 
     bids_path = BIDSPath(
         subject=subject, session=session, task=task,
