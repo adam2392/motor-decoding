@@ -1,7 +1,9 @@
+import os
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent / "io"))
+if os.path.abspath(Path(__file__).parents[3]) not in sys.path:
+    sys.path.append(os.path.abspath(Path(__file__).parents[3]))
 
 from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds, read_label, read_dataset
 
