@@ -39,7 +39,7 @@ from plotting import (
 sys.path.append(str(Path(__file__).parent.parent / "io"))
 sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
 
-from read import read_dataset, read_label, read_trial, get_trial_info, _get_bad_chs
+from read import read_dataset, read_label, read_trial, get_trial_info, _get_anatomical_bad_chs
 from utils import NumpyEncoder
 import json
 from sklearn.inspection import permutation_importance

@@ -376,6 +376,9 @@ def read_trial_metadata(root, subject, run='01'):
 
 def read_move_trial_epochs(root, subject, run='01',
                            event_key: str = 'Left Target',
+                           event_key_end = 'Hit Target',
+                           tmin: float = -0.2,
+                           tmax: float = 0.5,
                            l_freq: float = 1.,
                            h_freq: float = None,
                            notch_filter: bool = True,
@@ -444,9 +447,6 @@ def read_move_trial_epochs(root, subject, run='01',
     Show Center, and add the trials there.
     """
     # readin in epoch hyperparameters
-    tmin = -0.2
-    tmax = 0.5
-    event_key_end = 'Hit Target'  # end of trial we are interested in...
 
     # BIDS Path entities
     session = 'efri'
@@ -528,6 +528,8 @@ def read_move_trial_epochs(root, subject, run='01',
                                 remove_unsuccessful=True)
 
     # drop unsuccessful trial rows
+    if len(trials_df_metadata) == len(epoch_events):
+        epoch_events = np.delete(epoch_events, drop_inds, axis=0)
     trials_df_metadata.drop(drop_inds, inplace=True)
     trials_df_metadata.reset_index(drop=True, inplace=True)
 

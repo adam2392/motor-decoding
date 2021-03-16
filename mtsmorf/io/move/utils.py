@@ -5,15 +5,12 @@ from mtsmorf.io.read import _get_anatomical_bad_chs, get_unperturbed_trial_inds
 
 def _preprocess_epochs(epochs, resample_rate=500, l_freq=1, h_freq=None):
     """Preprocess mne.Epochs object in the following way:
-    1. Low-pass filter up to Nyquist frequency
-    2. Downsample data to 500 Hz
+    1. Band-pass filter between l_freq and h_freq
+    2. Downsample data to new resampling rate
     """
     epochs.load_data()
 
-    fs = epochs.info["sfreq"]
-    if h_freq is None:
-        h_freq = fs / 2 - 1
-    # Low-pass filter up to sfreq/2
+    # Band-pass filter
     new_epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
 
     # Downsample epochs to 500 Hz
