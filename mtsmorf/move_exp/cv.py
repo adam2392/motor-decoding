@@ -45,6 +45,9 @@ from utils import NumpyEncoder
 from sklearn.neighbors import KNeighborsClassifier
 from tensorflow.python.keras.wrappers.scikit_learn import KerasClassifier
 
+# test if GPU is available
+tf.test.is_gpu_available()
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 def prep_grid(clf, apply_grid):
     if apply_grid:

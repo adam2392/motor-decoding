@@ -1,12 +1,12 @@
 # path to folder of data for all subjects
-bids_root: "/Volumes/Mac/research/data/efri/"
+#bids_root: "/Volumes/Mac/research/data/efri/"
 # bids_root: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/"
-# bids_root: "/home/adam2392/hdd/Dropbox/efri/"
+ bids_root: "/home/adam2392/hdd/Dropbox/efri/"
 
 # path to folder of transformed data
-derivatives_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/"
-# derivatives_path: "/home/adam2392/hdd/Dropbox/efri/derivatives/"
+#derivatives_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/"
+ derivatives_path: "/home/adam2392/hdd/Dropbox/efri/derivatives/"
 
 # path to a subfolder derivatives_path to store results and figures
-results_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/mtmorf"
-# results_path: "/home/adam2392/hdd/Dropbox/efri/derivatives/workstation_output"
+#results_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/mtmorf"
+ results_path: "/home/adam2392/hdd/Dropbox/efri/derivatives/workstation_output/mtmorf"

@@ -201,8 +201,8 @@ def _main(
 if __name__ == "__main__":
     # bids root to write BIDS data to
     # bids_root = Path("/Users/adam2392/Dropbox/efri/")
-    bids_root = Path('/Users/adam2392/OneDrive - Johns Hopkins/efri/')
-    # bids_root = Path("/home/adam2392/hdd2/epilepsy_bids/")
+    # bids_root = Path('/Users/adam2392/OneDrive - Johns Hopkins/efri/')
+    bids_root = Path("/home/adam2392/hdd/Dropbox/efri/")
 
     # path to excel layout file - would be changed to the datasheet locally
     # define BIDS identifiers

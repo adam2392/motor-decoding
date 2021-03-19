@@ -20,6 +20,10 @@ matplotlib = "*"
 seaborn = "*"
 ptitprince = "*"
 dabest = "*"
+pyyaml = "*"
+tensorflow-gpu = "*"
+natsort = "*"
+xlrd = "*"
 
 [requires]
 python_version = "3.8"

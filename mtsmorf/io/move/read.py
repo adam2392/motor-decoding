@@ -113,7 +113,7 @@ def compute_xy_metrics(raw, event_key_start, event_key_end,
         recording=None
     )
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -288,7 +288,7 @@ def read_behav_xy_coords(root, subject, run='01'):
         run=run, suffix=datatype,
         root=root)
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -332,7 +332,7 @@ def read_trial_metadata(root, subject, run='01'):
         extension=extension, root=root)
 
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -343,8 +343,9 @@ def read_trial_metadata(root, subject, run='01'):
     behav_df = pd.read_csv(behav_path, delimiter="\t", index_col=None)
 
     # preprocess some columns
-    behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
-    # behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
+    if 'speed_instruction' in behav_df.columns:
+        behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
+        # behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
 
     # initialize trial data structure
     trials_metadata = []
@@ -467,7 +468,7 @@ def read_move_trial_epochs(root, subject, run='01',
               f'time-locked to {event_key}.')
 
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
