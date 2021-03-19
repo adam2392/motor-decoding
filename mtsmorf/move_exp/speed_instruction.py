@@ -32,9 +32,9 @@ def speed_instruction_experiment(
     root, subject, destination_path, cv, metrics, domain, n_jobs=1, random_state=None
 ):
     destination = Path(destination_path) / f"{domain}_domain/"
-    if os.path.exists(destination):
-        print(f"Results folder already exists for {domain} domain...terminating")
-        return
+    # if os.path.exists(destination):
+    #     print(f"Results folder already exists for {domain} domain...terminating")
+    #     return
 
     trials = read_trial_metadata(root, subject)
     trials = pd.DataFrame(trials)

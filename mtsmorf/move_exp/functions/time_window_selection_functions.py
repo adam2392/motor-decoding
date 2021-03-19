@@ -8,12 +8,13 @@ from pathlib import Path
 from ptitprince import PtitPrince as pt
 from sklearn.utils import check_random_state
 
-from cv import fit_classifiers_cv
-from .move_experiment_functions import get_preprocessed_labels, get_event_data
+if not str(Path(__file__).parents[3]) in sys.path:
+    sys.path.append(str(Path(__file__).parents[3]))
 
-sys.path.append(str(Path(__file__).parent.parent / "io"))
+from mtsmorf.move_exp.cv import fit_classifiers_cv
+from mtsmorf.move_exp.functions.move_experiment_functions import get_preprocessed_labels, get_event_data
 
-from read import get_trial_info_pd, get_unperturbed_trial_inds
+from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds
 
 
 label_names = {0: "Down", 1: "Right", 2: "Up", 3: "Left"}

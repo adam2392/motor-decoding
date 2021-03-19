@@ -1,6 +1,6 @@
 # path to folder of data for all subjects
-# bids_root: "/Volumes/Mac/research/data/efri/"
-bids_root: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/"
+bids_root: "/Volumes/Mac/research/data/efri/"
+# bids_root: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/"
 # bids_root: "/home/adam2392/hdd/Dropbox/efri/"
 
 # path to folder of transformed data

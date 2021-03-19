@@ -149,7 +149,7 @@ def compute_xy_metrics(raw, event_key_start, event_key_end,
 
         # get all the events between start of trial and end of trial
         idx = start_idx
-        if trial_idx < len(start_indices):
+        if trial_idx < len(start_indices) - 1:
             next_idx = start_indices[trial_idx + 1]
         else:
             next_idx = len(events)

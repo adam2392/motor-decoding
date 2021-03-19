@@ -73,9 +73,9 @@ def decode_movement(
 ):
     """Run classifier comparison in classifying before or after movement onset."""
     destination = Path(destination_path) / f"{domain}_domain"
-    if os.path.exists(destination):
-        print("Results folder already exists, we will not overwrite.")
-        return
+    # if os.path.exists(destination):
+    #     print("Results folder already exists, we will not overwrite.")
+    #     return
 
 
     before = read_move_trial_epochs(root, subject, event_key="At Center", tmin=0, tmax=1.0)
@@ -155,41 +155,41 @@ def decode_movement(
     y_test = y[best_test_inds]
 
     # Run feat importance for roc_auc_ovr
-    try:
-        n_repeats = 5  # number of repeats for permutation importance
+    # try:
+    #     n_repeats = 5  # number of repeats for permutation importance
 
-        scoring_methods = [
-            "roc_auc_ovr",
-        ]
-        for scoring_method in scoring_methods:
-            key_mean = f"validate_{scoring_method}_imp_mean"
-            if key_mean not in scores:
-                scores[key_mean] = []
+    #     scoring_methods = [
+    #         "roc_auc_ovr",
+    #     ]
+    #     for scoring_method in scoring_methods:
+    #         key_mean = f"validate_{scoring_method}_imp_mean"
+    #         if key_mean not in scores:
+    #             scores[key_mean] = []
 
-            key_std = f"validate_{scoring_method}_imp_std"
-            if key_std not in scores:
-                scores[key_std] = []
+    #         key_std = f"validate_{scoring_method}_imp_std"
+    #         if key_std not in scores:
+    #             scores[key_std] = []
 
-            print(f"{subject.upper()}: Running feature importances...")
-            result = permutation_importance(
-                best_estimator,
-                X_test,
-                y_test,
-                scoring=scoring_method,
-                n_repeats=n_repeats,
-                n_jobs=1,
-                random_state=random_state,
-            )
+    #         print(f"{subject.upper()}: Running feature importances...")
+    #         result = permutation_importance(
+    #             best_estimator,
+    #             X_test,
+    #             y_test,
+    #             scoring=scoring_method,
+    #             n_repeats=n_repeats,
+    #             n_jobs=1,
+    #             random_state=random_state,
+    #         )
 
-            imp_std = result.importances_std
-            imp_vals = result.importances_mean
-            scores[key_mean].append(list(imp_vals))
-            scores[key_std].append(list(imp_std))
+    #         imp_std = result.importances_std
+    #         imp_vals = result.importances_mean
+    #         scores[key_mean].append(list(imp_vals))
+    #         scores[key_std].append(list(imp_std))
 
-        cv_scores[clf_name] = scores
-    except:
-        print("feat importances failed...")
-        traceback.print_exc()
+    #     cv_scores[clf_name] = scores
+    # except:
+    #     print("feat importances failed...")
+    #     traceback.print_exc()
 
     if not os.path.exists(destination):
             os.makedirs(destination)

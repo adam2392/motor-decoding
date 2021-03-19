@@ -20,27 +20,27 @@ from sklearn.metrics import cohen_kappa_score, confusion_matrix, make_scorer, ro
 from sklearn.model_selection import cross_validate, StratifiedKFold
 from sklearn.utils import check_random_state
 
-from cv import cv_roc, cv_fit
-from functions.move_experiment_functions import get_event_data
-from functions.time_window_selection_functions import (
+# Hack-y way to import from files in sibling "io" directory
+if str(Path(__file__).parents[2]) in sys.path:
+    sys.path.append(str(Path(__file__).parents[2]))
+
+from mtsmorf.move_exp.cv import cv_roc, cv_fit
+from mtsmorf.move_exp.functions.move_experiment_functions import get_event_data
+from mtsmorf.move_exp.functions.time_window_selection_functions import (
     fit_classifiers_cv,
     get_event_durations,
     plot_event_durations,
     plot_event_onsets,
 )
-from plotting import (
+from mtsmorf.move_exp.plotting import (
     plot_roc_multiclass_cv,
     plot_accuracies,
     plot_roc_aucs,
     plot_classifier_performance,
 )
 
-# Hack-y way to import from files in sibling "io" directory
-sys.path.append(str(Path(__file__).parent.parent / "io"))
-sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
-
-from read import read_dataset, read_label, read_trial, get_trial_info, _get_anatomical_bad_chs
-from utils import NumpyEncoder
+from mtsmorf.io.read import read_dataset, read_label, read_trial, get_trial_info, _get_anatomical_bad_chs
+from mtsmorf.io.utils import NumpyEncoder
 import json
 from sklearn.inspection import permutation_importance
 import yaml
