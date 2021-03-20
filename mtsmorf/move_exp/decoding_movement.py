@@ -196,14 +196,16 @@ def decode_movement(
 
     for clf_name, clf_scores in cv_scores.items():
 
-        estimator = clf_scores["estimator"]
+        estimator = clf_scores.get("estimator")
         if estimator is not None:
             del clf_scores["estimator"]
 
         with open(destination / f"{subject}_{clf_name}_results.json", "w") as fout:
             json.dump(clf_scores, fout, cls=NumpyEncoder)
             print(f"{subject.upper()} CV results for {clf_name} saved as json.")
-        cv_scores[clf_name]["estimator"] = estimator
+
+        if estimator is not None:
+            cv_scores[clf_name]["estimator"] = estimator
 
     ## Plot results
     fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))

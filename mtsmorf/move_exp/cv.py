@@ -45,9 +45,6 @@ from utils import NumpyEncoder
 from sklearn.neighbors import KNeighborsClassifier
 from tensorflow.python.keras.wrappers.scikit_learn import KerasClassifier
 
-# test if GPU is available
-tf.test.is_gpu_available()
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 def prep_grid(clf, apply_grid):
     if apply_grid:
@@ -360,7 +357,14 @@ def cv_fit(
     scores.update(cv_roc(clf, X, y, cv))
 
     # Appending model parameters
-    scores["model_params"] = clf.get_params()
+    if isinstance(clf, KerasClassifier):
+        params = clf.get_params()
+        # Delete callable in KerasClassifier JSON
+        if params.get("build_fn") is not None:
+            del params["build_fn"]
+        scores["model_params"] = params
+    else:
+        scores["model_params"] = clf.get_params()
 
     return scores
 
@@ -518,15 +522,16 @@ def fit_classifiers_cv(
                 return_train_score=True,
                 return_estimator=False  # cannot pickle KerasClassifier
             )
-        clf_scores[clf_name] = cv_fit(
-            clf,
-            X,
-            y,
-            cv=cv,
-            metrics=metrics,
-            n_jobs=n_jobs,
-            return_train_score=True,
-            return_estimator=True,
-        )
+        else:
+            clf_scores[clf_name] = cv_fit(
+                clf,
+                X,
+                y,
+                cv=cv,
+                metrics=metrics,
+                n_jobs=n_jobs,
+                return_train_score=True,
+                return_estimator=True,
+            )
 
     return clf_scores
