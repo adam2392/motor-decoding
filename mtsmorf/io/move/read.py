@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from mne import create_info
 from mne.io import RawArray
+from mne.utils import warn
 from mne_bids import BIDSPath, read_raw_bids
 from mne_bids.read import _handle_events_reading
 from mne_bids.tsv_handler import _from_tsv
@@ -90,6 +91,7 @@ class Trial:
 
     def _add_xy_metrics(self, metrics_df):
         if not self.success or self.perturbed:
+            warn(f'Cant add xy metrics to unsuccessful or perturbed trial.')
             return
 
         summ_df = metrics_df.groupby("trial_idx")["Speed"].agg([np.nanmean, np.nanstd])
