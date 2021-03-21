@@ -131,10 +131,11 @@ def speed_instruction_experiment(
             estimator = clf_scores.get("estimator")
             if estimator is not None:
                 del clf_scores["estimator"]
+            print(clf_scores.keys())
 
             with open(destination / f"{subject}_{clf_name}_results.json", "w") as fout:
                 json.dump(clf_scores, fout, cls=NumpyEncoder)
-                print(f"{subject.upper()} CV results for {clf_name} saved as json.")
+                print(f"{subject.upper()} CV results for {clf_name} saved as json at {fout}.")
             
             if estimator is not None:
                 clf_scores["estimator"] = estimator
