@@ -115,7 +115,7 @@ def compute_xy_metrics(raw, event_key_start, event_key_end,
         recording=None
     )
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -151,7 +151,7 @@ def compute_xy_metrics(raw, event_key_start, event_key_end,
 
         # get all the events between start of trial and end of trial
         idx = start_idx
-        if trial_idx < len(start_indices):
+        if trial_idx < len(start_indices) - 1:
             next_idx = start_indices[trial_idx + 1]
         else:
             next_idx = len(events)
@@ -290,7 +290,7 @@ def read_behav_xy_coords(root, subject, run='01'):
         run=run, suffix=datatype,
         root=root)
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -334,7 +334,7 @@ def read_trial_metadata(root, subject, run='01'):
         extension=extension, root=root)
 
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -345,8 +345,9 @@ def read_trial_metadata(root, subject, run='01'):
     behav_df = pd.read_csv(behav_path, delimiter="\t", index_col=None)
 
     # preprocess some columns
-    behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
-    # behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
+    if 'speed_instruction' in behav_df.columns:
+        behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
+        # behav_df['speed_instruction'] = behav_df['speed_instruction'].map({1. / 3: 'slow', 2. / 3: 'fast'})
 
     # initialize trial data structure
     trials_metadata = []
@@ -378,6 +379,9 @@ def read_trial_metadata(root, subject, run='01'):
 
 def read_move_trial_epochs(root, subject, run='01',
                            event_key: str = 'Left Target',
+                           event_key_end = 'Hit Target',
+                           tmin: float = -0.2,
+                           tmax: float = 0.5,
                            l_freq: float = 1.,
                            h_freq: float = None,
                            notch_filter: bool = True,
@@ -446,9 +450,6 @@ def read_move_trial_epochs(root, subject, run='01',
     Show Center, and add the trials there.
     """
     # readin in epoch hyperparameters
-    tmin = -0.2
-    tmax = 0.5
-    event_key_end = 'Hit Target'  # end of trial we are interested in...
 
     # BIDS Path entities
     session = 'efri'
@@ -469,7 +470,7 @@ def read_move_trial_epochs(root, subject, run='01',
               f'time-locked to {event_key}.')
 
     behav_path = bids_path.copy().update(
-        suffix='behav', extension='.tsv'
+        suffix='beh', extension='.tsv', check=False
     )
     events_path = bids_path.copy().update(
         suffix='events', extension='.tsv'
@@ -530,6 +531,8 @@ def read_move_trial_epochs(root, subject, run='01',
                                 remove_unsuccessful=True)
 
     # drop unsuccessful trial rows
+    if len(trials_df_metadata) == len(epoch_events):
+        epoch_events = np.delete(epoch_events, drop_inds, axis=0)
     trials_df_metadata.drop(drop_inds, inplace=True)
     trials_df_metadata.reset_index(drop=True, inplace=True)
 
