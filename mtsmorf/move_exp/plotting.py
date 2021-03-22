@@ -33,6 +33,9 @@ except Exception as e:
 plt.rcParams["font.family"] = "sans-serif"
 
 
+# plt.style.use(["science", "ieee", "no-latex"])
+
+
 def _mean_confidence_interval(data, confidence=0.95):
     a = 1.0 * np.array(data)
     n = a.shape[0]
@@ -75,7 +78,6 @@ def plot_signals(epochs, labels, picks=None, axs=None):
 
         # for each class label
         for label, color in zip(np.unique(labels), colors):
-
             _plot_signal(
                 times,
                 ch_data[labels == label],
@@ -208,7 +210,7 @@ def plot_spectrogram(power, freqs, n_cycles, picks, func="average", db=False, ax
 
 
 def plot_feature_importances(
-    result, ch_names, times, image_height, image_width, vmin=None, vmax=None, ax=None
+        result, ch_names, times, image_height, image_width, vmin=None, vmax=None, ax=None
 ):
     nchs = len(ch_names)
     nsteps = len(times)
@@ -252,7 +254,6 @@ def plot_feature_importances(
 
 
 def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None):
-
     if ax is None:
         _, ax = plt.subplots()
 
@@ -326,7 +327,7 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=N
         mean_fpr,
         mean_tpr,
         label=label
-        + r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+              + r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
             mean_auc=mean_auc, std_auc=std_auc
         ),
         ls="-",
@@ -351,7 +352,6 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=N
 
 
 def _compute_roc_multiclass(y_true, y_score, n_classes):
-
     fprs = []
     tprs = []
     roc_auc = []
@@ -375,9 +375,8 @@ def _compute_roc_multiclass(y_true, y_score, n_classes):
 
 
 def plot_roc_multiclass_cv(
-    y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None
+        y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None
 ):
-
     if ax is None:
         _, ax = plt.subplots()
 
@@ -564,7 +563,6 @@ def plot_accuracies(clf_scores, ax=None, random_seed=1):
 
 
 def plot_roc_aucs(clf_scores, ax=None, random_seed=1):
-
     if ax is None:
         _, ax = plt.subplots()
 
@@ -593,14 +591,12 @@ def plot_roc_aucs(clf_scores, ax=None, random_seed=1):
 
 
 def plot_classifier_performance(clf_scores, X, y, axs=None):
-
     if axs is None:
         axs = plt.subplots(ncols=2)
         axs = axs.flatten()
 
     if len(axs) != 2:
         raise ValueError("Axes to be plotted to should have exactly 2 subplots.")
-
 
     # 1. Plot roc curves
     # n_classes = len(np.unique(y))

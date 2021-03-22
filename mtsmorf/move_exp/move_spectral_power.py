@@ -1,8 +1,9 @@
+"""Run move spectral power experiiments."""
 import argparse
 import json
 import os
-import sys
 import traceback
+import sys
 from pathlib import Path
 
 import mne
@@ -18,23 +19,28 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
-from tqdm import tqdm
 
-# Hack-y way to import from files in sibling "io" directory
-sys.path.append(str(Path(__file__).parent.parent / "io"))
-sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
-
-from read import read_dataset, read_label, read_trial, get_trial_info
+sys.path.append('../../')
+from mtsmorf.io.read import read_label, get_trial_info
+from mtsmorf.io.utils import NumpyEncoder
+from mtsmorf.war_exp.cv import cv_fit
 from plotting import (
     plot_signals,
     plot_roc_multiclass_cv,
     plot_feature_importances,
     plot_cv_indices,
 )
+<<<<<<< Updated upstream
 from utils import NumpyEncoder
 from experiments import cv_fit
+=======
+>>>>>>> Stashed changes
 
-plt.style.use(["science", "ieee", "no-latex"])
+# Hack-y way to import from files in sibling "io" directory
+# sys.path.append(str(Path(__file__).parent.parent / "io"))
+# sys.path.append(str(Path(__file__).parent.parent / "war_exp"))
+
+# plt.style.use(["science", "ieee", "no-latex"])
 
 RNG = 1
 
@@ -77,7 +83,7 @@ def str2bool(v):
 
 
 def prepare_freq_data(
-    epochs, nfreqs=10, l_freq=70, h_freq=200, decim=3, n_jobs=1, return_freqs=False
+        epochs, nfreqs=10, l_freq=70, h_freq=200, decim=3, n_jobs=1, return_freqs=False
 ):
     # Run morlet wavelet transform
     freqs = np.logspace(*np.log10([l_freq, h_freq]), num=nfreqs)
@@ -135,17 +141,23 @@ if __name__ == "__main__":
 
     #### TODO: change file paths
     bids_root = Path("/workspaces/research/mnt/data/efri/")
+    bids_root = Path('/home/adam2392/hdd/Dropbox/efri/')
     derivatives_path = (
-        bids_root
-        / "derivatives"
-        / "preprocessed"
-        / f"tmin={tmin}-tmax={tmax}"
-        / "low-pass=1000Hz-downsample=500"
+            bids_root
+            / "derivatives"
+            / "preprocessed"
+            / f"tmin={tmin}-tmax={tmax}"
+            / "low-pass=1000Hz-downsample=500"
     )
+<<<<<<< Updated upstream
     # results_path = Path("/workspaces/research/seeg localization/SPORF/mtsmorf/results")
     results_path = Path(
         "/workspaces/research/efri OneDrive/Adam Li - efri/derivatives/workstation_output"
     )
+=======
+    results_path = Path("/workspaces/research/seeg localization/SPORF/mtsmorf/results")
+    results_path = bids_root / 'derivatives' / 'workstation_output'
+>>>>>>> Stashed changes
 
     # new directory paths for outputs and inputs at Hackerman workstation
     # bids_root = Path("/home/adam2392/hdd/Dropbox/efri/")
@@ -357,8 +369,8 @@ if __name__ == "__main__":
                     estimators = scores["estimator"]
                     del scores["estimator"]
                 with open(
-                    results_path / f"{subject}/{subject}_{clf_name}_results.json",
-                    "w",
+                        results_path / f"{subject}/{subject}_{clf_name}_results.json",
+                        "w",
                 ) as fout:
                     json.dump(scores, fout, cls=NumpyEncoder)
                     print(f"CV results for {clf_name} saved as json.")
@@ -382,7 +394,7 @@ if __name__ == "__main__":
                 clf_name = clf.__class__.__name__
 
             with open(
-                results_path / f"{subject}/{subject}_{clf_name}_results.json"
+                    results_path / f"{subject}/{subject}_{clf_name}_results.json"
             ) as fout:
                 scores = json.load(fout)
 
@@ -553,7 +565,7 @@ if __name__ == "__main__":
             clf_name = clf.__class__.__name__
 
         with open(
-            results_path / f"{subject}/{subject}_{clf_name}_results.json"
+                results_path / f"{subject}/{subject}_{clf_name}_results.json"
         ) as fout:
             scores = json.load(fout)
 
