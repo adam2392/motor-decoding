@@ -487,7 +487,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
         "ConvNet": cnn, 
         "MT-MORF": mtsmorf, 
         "SPORF": srerf, 
-        "Log. Reg": lr, 
+        # "Log. Reg": lr,
         "kNN": knn, 
         "RF": rf, 
         "MLP": mlp, 
