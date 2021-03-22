@@ -7,4 +7,4 @@ def compute_freq_band_power(epochs, l_freq, h_freq, name, method='hilbert'):
 
         # get data
 
-    return band_epochs.get_data()
+    return np.abs(band_epochs.get_data())
