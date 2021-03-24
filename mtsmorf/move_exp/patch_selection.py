@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import seaborn as sns
+from matplotlib import pyplot as plt
 from joblib import Parallel, delayed
 from rerf.rerfClassifier import rerfClassifier
 from sklearn.metrics import check_scoring
@@ -11,7 +13,6 @@ import sys
 import yaml
 from pathlib import Path
 
-import numpy as np
 from mne_bids.path import BIDSPath
 from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -282,8 +283,7 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
             for r in rows
             for c in cols
         ])
-        for rows in patch_rows
-        for cols in patch_cols
+        for rows, cols in zip(patch_rows, patch_cols)
     ])
 
     scores = Parallel(n_jobs=n_jobs)(delayed(_calculate_permutation_scores)(
@@ -291,10 +291,30 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
         ) for patch in patches)
 
     importances = baseline_score - np.array(scores)
-    return Bunch(importances_mean=np.mean(importances, axis=1),
-                 importances_std=np.std(importances, axis=1),
+
+    # Count number of times each pixel was used in patch sampling
+    unique, counts = np.unique(patches, return_counts=True)
+    
+    usage_counts = np.zeros(image_height * image_width, dtype=np.int)
+    usage_counts[unique] = counts
+    
+    # Sum all the importances for each pixel
+    total_importances = np.zeros(image_height * image_width)
+    summed_importances = np.repeat(np.sum(importances, axis=1), patches.shape[1])
+    np.add.at(total_importances, patches.flatten(), summed_importances)
+
+    # Average importance for each pixel based on how many times it was used
+    mean_importances = np.zeros_like(total_importances)
+    mean_importances = np.divide(total_importances, usage_counts, out=mean_importances, 
+                                 where=(usage_counts != 0))
+
+    # Reshape into a 2-D array
+    mean_importances = mean_importances.reshape(image_height, image_width)
+    return Bunch(importances_mean=mean_importances,
+                #  importances_std=np.std(importances, axis=1),  # Figure out by append importances for each pixel later
                  importances=importances,
-                 patch_inds=patches)
+                 patch_inds=patches,
+                 usage_counts=usage_counts)
 
 
 def gaussian_classification_test():
@@ -318,12 +338,42 @@ def gaussian_classification_test():
     clf.fit(X_train, y_train)
 
     result = patch_selection(clf, X_test, y_test, image_height, image_width, 
-                             patch_width=5, patch_height=5, scoring="roc_auc",
+                             patch_height=5, patch_width=5, scoring="roc_auc",
                              random_state=1)
 
+
+def gaussian_classification_randomized_test():
+    np.random.seed(1)
+
+    n = 50
+    image_height, image_width = 10, 20
+    class0 = np.random.randn(n // 2, image_height, image_width)
+    class1 = np.random.randn(n // 2, image_height, image_width) + 2e-1
+
+    data = np.vstack([class0, class1])
+    labels = np.vstack([np.zeros((n // 2, 1)), np.ones((n // 2, 1))])
+
+    shuffle_idx = np.random.choice(n, size=n, replace=False)
+    X = data[shuffle_idx].reshape(n, -1)
+    y = np.squeeze(labels[shuffle_idx])
+    X_train, X_test, y_train, y_test = train_test_split(X, y)
+
+    clf = rerfClassifier(projection_matrix="MT-MORF", n_jobs=-1, random_state=1,
+                         image_height=image_height, image_width=image_width)
+    clf.fit(X_train, y_train)
+
+    n_repeats = 5
+    n_patches = 50
+    patch_height = 5
+    patch_width = 5
     result = randomized_patch_selection(clf, X_test, y_test, image_height, 
-                                        image_width, patch_width=5, patch_height=5, 
-                                        scoring="roc_auc", random_state=1)
+                                        image_width, n_repeats=n_repeats, 
+                                        n_patches=n_patches, patch_height=patch_height, 
+                                        patch_width=patch_width, scoring="roc_auc", 
+                                        random_state=1)
+
+    assert result.patch_inds.shape == (n_patches, patch_height * patch_width)
+    assert result.importances.shape == (n_patches, n_repeats)
 
 
 def efri_movement_test(save_results=False):
@@ -413,5 +463,6 @@ def efri_movement_test(save_results=False):
 
 
 if __name__ == "__main__":
-    gaussian_classification_test()
-    efri_movement_test()
+    # gaussian_classification_test()
+    gaussian_classification_randomized_test()
+    # efri_movement_test()
