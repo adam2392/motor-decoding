@@ -256,7 +256,6 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
     baseline_score = _weights_scorer(scorer, estimator, X, y, sample_weight)
 
     if n_patches is None:
-        # TODO: See what would be a good number to do.
         n_samples, n_features = X.shape
         n_patches = n_features // (patch_height * patch_width)
 
@@ -311,7 +310,7 @@ def randomized_patch_selection(estimator, X, y, image_height, image_width, *,
     # Reshape into a 2-D array
     mean_importances = mean_importances.reshape(image_height, image_width)
     return Bunch(importances_mean=mean_importances,
-                #  importances_std=np.std(importances, axis=1),  # Figure out by append importances for each pixel later
+                #  importances_std=np.std(importances, axis=1),  # Need to append importances...for later
                  importances=importances,
                  patch_inds=patches,
                  usage_counts=usage_counts)
@@ -463,6 +462,6 @@ def efri_movement_test(save_results=False):
 
 
 if __name__ == "__main__":
-    # gaussian_classification_test()
+    gaussian_classification_test()
     gaussian_classification_randomized_test()
-    # efri_movement_test()
+    efri_movement_test()
