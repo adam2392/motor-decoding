@@ -4,6 +4,7 @@ import seaborn as sns
 import statsmodels.api as sm
 import sys
 from matplotlib import pyplot as plt
+from mne_bids.tsv_handler import _from_tsv
 from pathlib import Path
 from ptitprince import PtitPrince as pt
 from sklearn.utils import check_random_state
@@ -13,7 +14,6 @@ if not str(Path(__file__).parents[3]) in sys.path:
 
 from mtsmorf.move_exp.cv import fit_classifiers_cv
 from mtsmorf.move_exp.functions.move_experiment_functions import get_preprocessed_labels, get_event_data
-
 from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds
 
 
@@ -114,7 +114,9 @@ def get_event_durations(bids_path, event_key="Left Target", periods=1, verbose=F
     durations.index = np.arange(len(durations))
 
     # remove perturbed trial indices
-    unperturbed_trial_inds = get_unperturbed_trial_inds(behav)
+    successes = behav.query("successful_trial_flag == 1")
+    successes.index = np.arange(len(successes))
+    unperturbed_trial_inds = get_unperturbed_trial_inds(successes)
     durations = durations.iloc[unperturbed_trial_inds]
 
     return durations

@@ -127,7 +127,7 @@ def plot_epoch_time_series(epochs, picks=None, vmin=None, vmax=None, axs=None):
             vmin=vmin_,
             vmax=vmax_,
             center=0.0,
-            cbar_kws={"label": "mV"}
+            cbar_kws={"label": "mV"},
         )
         ax.invert_yaxis()
 
@@ -210,7 +210,7 @@ def plot_spectrogram(power, freqs, n_cycles, picks, func="average", db=False, ax
 
 
 def plot_feature_importances(
-        result, ch_names, times, image_height, image_width, vmin=None, vmax=None, ax=None
+    result, ch_names, times, image_height, image_width, vmin=None, vmax=None, ax=None
 ):
     nchs = len(ch_names)
     nsteps = len(times)
@@ -327,7 +327,7 @@ def plot_roc_cv(y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=N
         mean_fpr,
         mean_tpr,
         label=label
-              + r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
+        + r"Mean ROC (AUC = {mean_auc:.3f} $\pm$ {std_auc:.3f})".format(
             mean_auc=mean_auc, std_auc=std_auc
         ),
         ls="-",
@@ -375,7 +375,7 @@ def _compute_roc_multiclass(y_true, y_score, n_classes):
 
 
 def plot_roc_multiclass_cv(
-        y_pred_probas, X, y, test_inds, label="", show_chance=True, ax=None
+    y_pred_probas, y, test_inds, label="", show_chance=True, ax=None
 ):
     if ax is None:
         _, ax = plt.subplots()
@@ -384,10 +384,11 @@ def plot_roc_multiclass_cv(
     tprs = []
     aucs = []
 
+    n_classes = len(np.unique(y))
+
     # Compute ROC metrics for each fold
     for i, (y_pred_proba, test) in enumerate(zip(y_pred_probas, test_inds)):
-        X_test, y_test = X[test], y[test]
-        n_classes = len(np.unique(y_test))
+        y_test = y[test]
         y_pred_proba = np.array(y_pred_proba)
 
         # Compute ROC metrics for each class
