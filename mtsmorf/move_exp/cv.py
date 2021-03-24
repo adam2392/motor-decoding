@@ -8,11 +8,13 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import tensorflow as tf
+from tensorflow.keras import layers, models
 from mne.decoding import Scaler, Vectorizer
 from mne_bids import BIDSPath
 from sklearn.base import clone
 from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
@@ -29,6 +31,7 @@ from sklearn.model_selection import (
     KFold,
     RandomizedSearchCV,
 )
+from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import resample, check_random_state
@@ -39,6 +42,8 @@ from tqdm import tqdm
 sys.path.append(str(Path(__file__).parent.parent / "io"))
 from read import read_label, read_dataset
 from utils import NumpyEncoder
+from sklearn.neighbors import KNeighborsClassifier
+from tensorflow.python.keras.wrappers.scikit_learn import KerasClassifier
 
 
 def prep_grid(clf, apply_grid):
@@ -263,7 +268,12 @@ def cv_roc(clf, X, y, cv):
     mean_fpr = np.linspace(0, 1, 100)
 
     for i, (train, test) in enumerate(cv.split(X=X, y=y)):
-        clf.fit(X[train], y[train])
+        if isinstance(clf, KerasClassifier):
+            n_classes = len(np.unique(y))
+            yencoded = tf.one_hot(y, n_classes).numpy()
+            clf.fit(X[train], yencoded[train])
+        else:
+            clf.fit(X[train], y[train])
 
         y_train_prob = clf.predict_proba(X[train])
         y_train_pred = clf.predict(X[train])
@@ -347,7 +357,14 @@ def cv_fit(
     scores.update(cv_roc(clf, X, y, cv))
 
     # Appending model parameters
-    scores["model_params"] = clf.get_params()
+    if isinstance(clf, KerasClassifier):
+        params = clf.get_params()
+        # Delete callable in KerasClassifier JSON
+        if params.get("build_fn") is not None:
+            del params["build_fn"]
+        scores["model_params"] = params
+    else:
+        scores["model_params"] = clf.get_params()
 
     return scores
 
@@ -416,7 +433,7 @@ def bootstrap_fit(
     return scores
 
 
-def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=None):
+def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, random_state=None):
     """Initialize a list of classifiers to be compared."""
 
     mtsmorf = rerfClassifier(
@@ -438,24 +455,47 @@ def initialize_classifiers(image_height, image_width, n_jobs=1, random_state=Non
     )
 
     lr = LogisticRegression(random_state=random_state)
+    knn = KNeighborsClassifier()
     rf = RandomForestClassifier(random_state=random_state)
+    mlp = MLPClassifier(random_state=random_state)
+    xgb = GradientBoostingClassifier(random_state=random_state)
+
+    # Build CNN model
+    def _build_cnn():
+
+        model = models.Sequential()
+        model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(image_height, image_width, 1)))
+        model.add(layers.MaxPooling2D((2, 2)))
+        model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+        model.add(layers.MaxPooling2D((2, 2)))
+        model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+        model.add(layers.Flatten())
+        model.add(layers.Dense(64, activation='relu'))
+        model.add(layers.Dense(n_classes, activation='softmax'))
+
+        model.compile(
+            optimizer="adam",
+            loss="categorical_crossentropy",
+            metrics=["accuracy", tf.keras.metrics.AUC(multi_label=True)],
+        )
+        return model
+
+    cnn = KerasClassifier(_build_cnn, verbose=0)
     dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
 
-    clfs = [mtsmorf, srerf, lr, rf, dummy]
+    clfs = {
+        "ConvNet": cnn, 
+        "MT-MORF": mtsmorf, 
+        "SPORF": srerf, 
+        # "Log. Reg": lr,
+        "kNN": knn, 
+        "RF": rf, 
+        "MLP": mlp, 
+        "XGB": xgb, 
+        "Dummy": dummy
+    }
 
     return clfs
-
-
-def _get_classifier_name(clf):
-    """Get the classifier name based on class type."""
-    if isinstance(clf, rerfClassifier):
-        clf_name = clf.get_params()["projection_matrix"]
-    elif isinstance(clf, DummyClassifier):
-        clf_name = clf.strategy
-    else:
-        clf_name = clf.__class__.__name__
-
-    return clf_name
 
 
 def fit_classifiers_cv(
@@ -463,21 +503,35 @@ def fit_classifiers_cv(
 ):
     """Run cross-validation for classifiers listed in initialize_classifiers()."""
     clf_scores = dict()
+    n_classes = len(np.unique(y))
     clfs = initialize_classifiers(
-        image_height, image_width, n_jobs=n_jobs, random_state=random_state
+        image_height, image_width, n_classes, n_jobs=n_jobs, random_state=random_state
     )
 
-    for clf in clfs:
-        clf_name = _get_classifier_name(clf)
-        clf_scores[clf_name] = cv_fit(
-            clf,
-            X,
-            y,
-            cv=cv,
-            metrics=metrics,
-            n_jobs=n_jobs,
-            return_train_score=True,
-            return_estimator=True,
-        )
+    for clf_name, clf in clfs.items():
+        if isinstance(clf, KerasClassifier):
+            Xcopy = X.copy()
+            Xcopy = Xcopy.reshape(Xcopy.shape[0], image_height, image_width, 1)
+            clf_scores[clf_name] = cv_fit(
+                clf,
+                Xcopy,
+                y,
+                cv=cv,
+                metrics=metrics,
+                n_jobs=n_jobs,
+                return_train_score=True,
+                return_estimator=False  # cannot pickle KerasClassifier
+            )
+        else:
+            clf_scores[clf_name] = cv_fit(
+                clf,
+                X,
+                y,
+                cv=cv,
+                metrics=metrics,
+                n_jobs=n_jobs,
+                return_train_score=True,
+                return_estimator=True,
+            )
 
     return clf_scores

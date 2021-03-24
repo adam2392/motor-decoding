@@ -124,7 +124,7 @@ def _get_trial_length_by_kwarg(
     return max_trial_len
 
 
-def _get_bad_chs(bids_path):
+def _get_anatomical_bad_chs(bids_path):
     # get the channel anat dict
     ch_anat_dict = _read_ch_anat(bids_path)
 
@@ -149,11 +149,11 @@ def get_unperturbed_trial_inds(behav):
     ].apply(pd.to_numeric)
 
     # filter out failed trials -- we don't want these anyway
-    successes = behav[behav.successful_trial_flag == 1]
-    successes.index = np.arange(len(successes))
+    # successes = behav[behav.successful_trial_flag == 1]
+    # successes.index = np.arange(len(successes))
 
     # filter out labels for perturbed trials
-    unperturbed_trial_inds = successes[successes.force_magnitude == 0].index
+    unperturbed_trial_inds = behav[behav.force_magnitude == 0].index
     unperturbed_trial_inds = unperturbed_trial_inds.to_list()
 
     return unperturbed_trial_inds
@@ -163,7 +163,7 @@ def read_trial(bids_path, trial_id, picks=None):
     """Read Raw from specific trial id."""
     raw = read_raw_bids(bids_path)
 
-    bads = _get_bad_chs(bids_path)
+    bads = _get_anatomical_bad_chs(bids_path)
     raw.info["bads"].extend(bads)
 
     if picks is None:
@@ -263,7 +263,7 @@ def read_dataset(
     raw = read_raw_bids(bids_path)
 
     # append bad channels
-    bads = _get_bad_chs(bids_path)
+    bads = _get_anatomical_bad_chs(bids_path)
     raw.info["bads"].extend(bads)
 
     # only keep SEEG chs

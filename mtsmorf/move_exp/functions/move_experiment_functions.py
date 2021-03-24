@@ -1,31 +1,23 @@
+import os
 import sys
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-import statsmodels.api as sm
+if os.path.abspath(Path(__file__).parents[3]) not in sys.path:
+    sys.path.append(os.path.abspath(Path(__file__).parents[3]))
 
-from rerf.rerfClassifier import rerfClassifier
-from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.utils import check_random_state
-
-from cv import cv_roc, cv_fit
-
-sys.path.append(str(Path(__file__).parent.parent / "io"))
-
-from read import get_trial_info_pd, get_unperturbed_trial_inds, read_label, read_dataset
+from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds, read_label, read_dataset
 
 
-def _preprocess_epochs(epochs, resample_rate=500):
+def _preprocess_epochs(epochs, resample_rate=500, l_freq=1, h_freq=None):
     """Preprocess mne.Epochs object in the following way:
     1. Low-pass filter up to Nyquist frequency
     2. Downsample data to 500 Hz
     """
-    # Low-pass filter up to sfreq/2
     fs = epochs.info["sfreq"]
-    new_epochs = epochs.filter(l_freq=1, h_freq=fs / 2 - 1)
+    if h_freq is None:
+        h_freq = fs / 2 - 1
+    # Low-pass filter up to sfreq/2
+    new_epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
 
     # Downsample epochs to 500 Hz
     if resample_rate is None and isinstance(resample_rate, (int, float)):
@@ -35,11 +27,11 @@ def _preprocess_epochs(epochs, resample_rate=500):
 
 
 def get_preprocessed_epochs(
-    bids_path,
-    kind="ieeg",
-    tmin=-0.2,
-    tmax=0.5,
-    event_key="Left Target",
+        bids_path,
+        kind="ieeg",
+        tmin=-0.2,
+        tmax=0.5,
+        event_key="Left Target",
 ):
     """Preprocess mne.Epochs object and drop perturbed trials."""
     # Grab original epochs structure
@@ -63,7 +55,7 @@ def get_preprocessed_epochs(
 
 
 def get_preprocessed_labels(
-    bids_path, trial_id=None, label_keyword="target_direction", verbose=False
+        bids_path, trial_id=None, label_keyword="target_direction", verbose=False
 ):
     """Read labels for each trial for the specified keyword. Keep labels for
     successful and unperturbed trials.
@@ -79,13 +71,13 @@ def get_preprocessed_labels(
 
 
 def get_event_data(
-    bids_path,
-    kind="ieeg",
-    tmin=-0.2,
-    tmax=0.5,
-    event_key="Left Target",
-    trial_id=None,
-    label_keyword="target_direction",
+        bids_path,
+        kind="ieeg",
+        tmin=-0.2,
+        tmax=0.5,
+        event_key="Left Target",
+        trial_id=None,
+        label_keyword="target_direction",
 ):
     """Read preprocessed mne.Epochs data structure time locked to label_keyword
     with corresponding trial information.
