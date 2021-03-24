@@ -20,7 +20,8 @@ def _preprocess_epochs(epochs, resample_rate=500, l_freq=1, h_freq=None):
     new_epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
 
     # Downsample epochs to 500 Hz
-    new_epochs = new_epochs.resample(resample_rate)
+    if resample_rate is None and isinstance(resample_rate, (int, float)):
+        new_epochs = new_epochs.resample(resample_rate)
 
     return new_epochs
 

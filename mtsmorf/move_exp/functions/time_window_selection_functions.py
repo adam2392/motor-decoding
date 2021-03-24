@@ -358,7 +358,7 @@ def plot_durations_cv_split(bids_path, cv, ax=None):
     return ax
 
 
-def fit_classifiers_cv_time_window(bids_path, cv, metrics, time_window_method, random_state=None):
+def fit_classifiers_cv_time_window(bids_path, cv, metrics, time_window_method, return_data=False, random_state=None):
     """docstring."""
     #TODO: Optimize implementation of this function.
     if time_window_method not in ['trial_specific', 'patient_specific']:
@@ -396,4 +396,8 @@ def fit_classifiers_cv_time_window(bids_path, cv, metrics, time_window_method, r
     image_width = nsteps
 
     clf_scores = fit_classifiers_cv(X, y, image_height, image_width, cv, metrics, random_state=random_state)
+
+    if return_data:
+        return clf_scores, masked_data, labels
+
     return clf_scores

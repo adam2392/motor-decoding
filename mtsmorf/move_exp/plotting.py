@@ -600,29 +600,6 @@ def plot_classifier_performance(clf_scores, X, y, axs=None):
         raise ValueError("Axes to be plotted to should have exactly 2 subplots.")
 
     # 1. Plot roc curves
-    # n_classes = len(np.unique(y))
-    # if n_classes > 2:
-    #     for clf_name, scores in clf_scores.items():
-    #         plot_roc_multiclass_cv(
-    #             scores["test_predict_proba"],
-    #             X,
-    #             y,
-    #             scores["test_inds"],
-    #             label=clf_name,
-    #             show_chance=False,
-    #             ax=axs[0],
-    #         )
-    # else:
-    #     for clf_name, scores in clf_scores.items():
-    #         plot_roc_aucs(
-    #             scores["test_predict_proba"],
-    #             X,
-    #             y,
-    #             scores["test_inds"],
-    #             label=clf_name,
-    #             show_chance=False,
-    #             ax=axs[0],
-    #         )
     plot_roc_aucs(clf_scores, ax=axs[0])
 
     # 2. Plot accuracies
