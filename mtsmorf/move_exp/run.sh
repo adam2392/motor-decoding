@@ -8,19 +8,18 @@ SCRIPTPATH="$(
 )"
 
 declare -a subjects=(
-   "efri02"
-#   "efri06"
-#   "efri07"
+  "efri02"
+  "efri06"
+  "efri07"
 #   "efri09"  # Too few samples
 #   "efri10"  # Unequal data size vs label size
-#   "efri13"
+  "efri13"
   "efri14"
   "efri15"
   "efri18"
   "efri20"
   "efri25"
   "efri26"
-#  "efri26"
 )
 
 for subject in "${subjects[@]}"; do
@@ -34,19 +33,24 @@ for subject in "${subjects[@]}"; do
   # python3 ./move_exp/experiments.py $subject -experiment plot_event_durations
   # python3 ./move_exp/experiments.py $subject -experiment plot_event_onsets
   # python3 ./move_exp/move_spectral_power.py $subject --replot-signals True --feat-importances False --rerun-fit False
-  echo "Starting Decode Movement"
-  chmod +x "$SCRIPTPATH/decoding_movement.py"
-  python "$SCRIPTPATH/decoding_movement.py" $subject
-  echo "Done with Decode Movement"
+  # echo "Starting Decode Movement"
+  # chmod +x "$SCRIPTPATH/decoding_movement.py"
+  # python "$SCRIPTPATH/decoding_movement.py" $subject
+  # echo "Done with Decode Movement"
 
-  echo "Starting Decode Directionality"
-  chmod +x "$SCRIPTPATH/decoding_directionality.py"
-  python "$SCRIPTPATH/decoding_directionality.py" $subject
-  echo "Done with Decode Directionality"
+  # echo "Starting Decode Directionality"
+  # chmod +x "$SCRIPTPATH/decoding_directionality.py"
+  # python "$SCRIPTPATH/decoding_directionality.py" $subject
+  # echo "Done with Decode Directionality"
 
-  echo "Starting Speed Instruction"
-  chmod +x "$SCRIPTPATH/speed_instruction.py"
-  python "$SCRIPTPATH/speed_instruction.py" $subject
+  # echo "Starting Speed Instruction"
+  # chmod +x "$SCRIPTPATH/speed_instruction.py"
+  # python "$SCRIPTPATH/speed_instruction.py" $subject
+  # echo "Done with Speed Instruction"
+
+  echo "Making patch selection plots"
+  chmod +x "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py"
+  python "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py" $subject
   echo "Done with Speed Instruction"
 
   echo "Done with $subject..."

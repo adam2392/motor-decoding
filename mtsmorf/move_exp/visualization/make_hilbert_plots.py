@@ -67,8 +67,8 @@ if __name__ == "__main__":
             hi_gamma=(70, 200),
         )
 
-        epochs_data = epochs.get_data()
-        ntrials, nchs, nsteps = epochs_data.shape
+        epochs_resampled = epochs.filter(1, epochs.info["sfreq"] / 2. - 1).resample(resample_rate)
+        epochs_data = epochs_resampled.get_data()
 
         ntrials, nchs, nsteps = epochs_data.shape
         X = epochs_data.reshape(ntrials, -1)
@@ -90,7 +90,7 @@ if __name__ == "__main__":
         plot_roc_multiclass_cv(
             scores["test_predict_proba"], labels, scores["test_inds"], label="", show_chance=True, ax=ax
         )
-        ax.set_title("Hilbert Transformed Data")
+        ax.set_title("Time Domain")
         ax.tick_params(
             axis='x',          # changes apply to the x-axis
             which='both',      # both major and minor ticks are affected
@@ -165,7 +165,7 @@ if __name__ == "__main__":
             image_height=nchs*nfreqs,
             image_width=nsteps,
         )
-        scores_stacked = cv_fit(clf, X, y, cv=cv, metrics=metrics, n_jobs=1, return_estimator=True)
+        scores_stacked = cv_fit(clf, X, y, cv=cv, metrics=metrics, n_jobs=1, return_estimator=False)
 
         fig, ax = plt.subplots(dpi=100, figsize=(6.4, 4.8))
 

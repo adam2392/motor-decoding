@@ -18,10 +18,11 @@ from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from rerf.rerfClassifier import rerfClassifier
 
-from functions.time_window_selection_functions import fit_classifiers_cv_time_window
+if not str(Path(__file__).parents[2]) in sys.path:
+    sys.path.append(str(Path(__file__).parents[2]))
 
-sys.path.append(str(Path(__file__).parent.parent / "io"))
-from utils import NumpyEncoder
+from mtsmorf.move_exp.functions.time_window_selection_functions import fit_classifiers_cv_time_window
+from mtsmorf.io.utils import NumpyEncoder
 
 
 def _weights_scorer(scorer, estimator, X, y, sample_weight):

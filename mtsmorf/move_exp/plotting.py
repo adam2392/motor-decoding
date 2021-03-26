@@ -242,7 +242,7 @@ def plot_feature_importances(
 
     time_lock = (np.abs(times)).argmin()
 
-    ax.axvline(time_lock, ls="--")
+    ax.axvline(time_lock, ls="--", c="lime")
 
     ax.set_xticks([0, time_lock, len(times)])
     ax.set_xticklabels(
