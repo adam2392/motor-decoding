@@ -4,6 +4,7 @@ import seaborn as sns
 import statsmodels.api as sm
 import sys
 from matplotlib import pyplot as plt
+from mne_bids.tsv_handler import _from_tsv
 from pathlib import Path
 from ptitprince import PtitPrince as pt
 from sklearn.utils import check_random_state
@@ -13,7 +14,6 @@ if not str(Path(__file__).parents[3]) in sys.path:
 
 from mtsmorf.move_exp.cv import fit_classifiers_cv
 from mtsmorf.move_exp.functions.move_experiment_functions import get_preprocessed_labels, get_event_data
-
 from mtsmorf.io.read import get_trial_info_pd, get_unperturbed_trial_inds
 
 
@@ -114,7 +114,9 @@ def get_event_durations(bids_path, event_key="Left Target", periods=1, verbose=F
     durations.index = np.arange(len(durations))
 
     # remove perturbed trial indices
-    unperturbed_trial_inds = get_unperturbed_trial_inds(behav)
+    successes = behav.query("successful_trial_flag == 1")
+    successes.index = np.arange(len(successes))
+    unperturbed_trial_inds = get_unperturbed_trial_inds(successes)
     durations = durations.iloc[unperturbed_trial_inds]
 
     return durations
@@ -356,7 +358,7 @@ def plot_durations_cv_split(bids_path, cv, ax=None):
     return ax
 
 
-def fit_classifiers_cv_time_window(bids_path, cv, metrics, time_window_method, random_state=None):
+def fit_classifiers_cv_time_window(bids_path, cv, metrics, time_window_method, return_data=False, random_state=None):
     """docstring."""
     #TODO: Optimize implementation of this function.
     if time_window_method not in ['trial_specific', 'patient_specific']:
@@ -394,4 +396,8 @@ def fit_classifiers_cv_time_window(bids_path, cv, metrics, time_window_method, r
     image_width = nsteps
 
     clf_scores = fit_classifiers_cv(X, y, image_height, image_width, cv, metrics, random_state=random_state)
+
+    if return_data:
+        return clf_scores, masked_data, labels
+
     return clf_scores
