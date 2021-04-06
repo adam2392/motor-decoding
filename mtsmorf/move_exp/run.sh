@@ -33,25 +33,32 @@ for subject in "${subjects[@]}"; do
   # python3 ./move_exp/experiments.py $subject -experiment plot_event_durations
   # python3 ./move_exp/experiments.py $subject -experiment plot_event_onsets
   # python3 ./move_exp/move_spectral_power.py $subject --replot-signals True --feat-importances False --rerun-fit False
+  
   # echo "Starting Decode Movement"
   # chmod +x "$SCRIPTPATH/decoding_movement.py"
-  # python "$SCRIPTPATH/decoding_movement.py" $subject
+  # python "$SCRIPTPATH/decoding_movement.py" $subject -domain "time"
+  # python "$SCRIPTPATH/decoding_movement.py" $subject -domain "freq"
   # echo "Done with Decode Movement"
 
-  # echo "Starting Decode Directionality"
-  # chmod +x "$SCRIPTPATH/decoding_directionality.py"
-  # python "$SCRIPTPATH/decoding_directionality.py" $subject
-  # echo "Done with Decode Directionality"
+  echo "Starting Decode Directionality"
+  chmod +x "$SCRIPTPATH/decoding_directionality.py"
+  python "$SCRIPTPATH/decoding_directionality.py" $subject
+  echo "Done with Decode Directionality"
+
+  echo "Starting Planning Movement"
+  chmod +x "$SCRIPTPATH/planning_movement.py"
+  python "$SCRIPTPATH/planning_movement.py" $subject
+  echo "Done with Planning Movement"
 
   # echo "Starting Speed Instruction"
   # chmod +x "$SCRIPTPATH/speed_instruction.py"
   # python "$SCRIPTPATH/speed_instruction.py" $subject
   # echo "Done with Speed Instruction"
 
-  echo "Making patch selection plots"
-  chmod +x "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py"
-  python "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py" $subject
-  echo "Done with Speed Instruction"
+  # echo "Making patch selection plots"
+  # chmod +x "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py"
+  # python "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py" $subject
+  # echo "Done with patch selection plots"
 
   echo "Done with $subject..."
 done

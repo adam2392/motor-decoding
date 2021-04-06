@@ -8,5 +8,5 @@ derivatives_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives
 #  derivatives_path: "/home/adam2392/hdd/Dropbox/efri/derivatives/"
 
 # path to a subfolder derivatives_path to store results and figures
-results_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/mtmorf"
+results_path: "/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/workstation_output/mtmorf"
 #  results_path: "/home/adam2392/hdd/Dropbox/efri/derivatives/workstation_output/mtmorf"

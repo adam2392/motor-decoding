@@ -355,6 +355,7 @@ def cv_fit(
 
     # Appending metrics for computing ROC curve
     scores.update(cv_roc(clf, X, y, cv))
+    scores.udpate({"ytrue": y})
 
     # Appending model parameters
     if isinstance(clf, KerasClassifier):
@@ -437,6 +438,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
     """Initialize a list of classifiers to be compared."""
 
     mtsmorf = rerfClassifier(
+        n_estimators=500,
         projection_matrix="MT-MORF",
         max_features="auto",
         n_jobs=-1,
@@ -446,6 +448,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
     )
 
     srerf = rerfClassifier(
+        n_estimators=500,
         projection_matrix="S-RerF",
         max_features="auto",
         n_jobs=-1,
@@ -456,7 +459,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
 
     lr = LogisticRegression(random_state=random_state)
     knn = KNeighborsClassifier()
-    rf = RandomForestClassifier(random_state=random_state)
+    rf = RandomForestClassifier(n_estimators=500, random_state=random_state)
     mlp = MLPClassifier(random_state=random_state)
     xgb = GradientBoostingClassifier(random_state=random_state)
 
@@ -487,7 +490,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
         "ConvNet": cnn, 
         "MT-MORF": mtsmorf, 
         "SPORF": srerf, 
-        # "Log. Reg": lr,
+        "Log. Reg": lr,
         "kNN": knn, 
         "RF": rf, 
         "MLP": mlp, 

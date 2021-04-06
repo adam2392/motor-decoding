@@ -135,10 +135,10 @@ def plot_event_durations(bids_path, jitter=0.025, ax=None, random_state=None):
 
     # Compute durations for go cue and left target events
     go_cue_duration = get_event_durations(
-        bids_path, event_key="Left Target", periods=-1
+        bids_path, event_key="Left Target", periods=1
     )
     left_target_duration = get_event_durations(
-        bids_path, event_key="Left Target", periods=1
+        bids_path, event_key="Left Target", periods=-1
     )
 
     ## Plot stripplot with random jitter in the x-coordinate

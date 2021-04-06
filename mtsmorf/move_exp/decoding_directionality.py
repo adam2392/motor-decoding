@@ -1,6 +1,8 @@
 import argparse
+import json
 import os
 import sys
+import traceback
 import yaml
 from pathlib import Path
 
@@ -12,27 +14,24 @@ from mne_bids.path import BIDSPath
 from mne import Epochs
 from mne.time_frequency import EpochsTFR
 from mne.time_frequency.tfr import tfr_morlet
+from rerf.rerfClassifier import rerfClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold
 
-from cv import fit_classifiers_cv
-from functions.time_window_selection_functions import (
+if os.path.abspath(Path(__file__).parents[2]) not in sys.path:
+    sys.path.append(os.path.abspath(Path(__file__).parents[2]))
+
+from mtsmorf.move_exp.cv import fit_classifiers_cv
+from mtsmorf.move_exp.functions.time_window_selection_functions import (
     get_event_durations,
     plot_event_durations,
     plot_event_onsets,
 )
-from plotting import plot_classifier_performance, plot_roc_multiclass_cv, plot_roc_aucs
-
-if os.path.abspath(Path(__file__).parents[2]) not in sys.path:
-    sys.path.append(os.path.abspath(Path(__file__).parents[2]))
-
+from mtsmorf.move_exp.plotting import plot_classifier_performance, plot_roc_multiclass_cv, plot_roc_aucs
 from mtsmorf.io.move.read import read_move_trial_epochs, read_trial_metadata
-
-from utils import NumpyEncoder
-from rerf.rerfClassifier import rerfClassifier
-import traceback
-import json
+from mtsmorf.io.utils import NumpyEncoder
+from sklearn.utils import check_random_state
 
 
 def decode_directionality(
@@ -42,25 +41,42 @@ def decode_directionality(
     cv,
     metrics,
     domain,
+    shuffle=False,
     n_jobs=1,
     random_state=None,
 ):
-    destination = Path(destination_path) / f"tmin=-0.2_tmax=0.5/{domain}_domain/"
+    rng = check_random_state(random_state)
+
+    tmin, tmax = -0.5, 1.0
+    destination = Path(destination_path) / f"tmin={tmin}_tmax={tmax}_shuffle={shuffle}/{domain}_domain/"
     # if os.path.exists(destination):
     #     print(f"Results folder already exists for {domain} domain...terminating")
     #     return
 
+    # session = 'efri'
+    # task = 'move'
+    # acquisition = 'seeg'
+    # datatype = 'ieeg'
+    # extension = '.vhdr'
+    # run = '01'
+
+    # bids_path = BIDSPath(
+    #     subject=subject, session=session, task=task,
+    #     acquisition=acquisition, datatype=datatype,
+    #     run=run, suffix=datatype,
+    #     extension=extension, root=root)
+
     # go_cue_durations = get_event_durations(
-    #     root, event_key="Left Target", periods=-1
+    #     bids_path, event_key="Left Target", periods=-1
     # )
     # left_target_durations = get_event_durations(
-    #     root, event_key="Left Target", periods=1
+    #     bids_path, event_key="Left Target", periods=1
     # )
 
     # tmin = -max(go_cue_durations)
     # tmax = max(left_target_durations)
 
-    epochs = read_move_trial_epochs(root, subject, tmin=-0.2, tmax=0.5)
+    epochs = read_move_trial_epochs(root, subject, tmin=tmin, tmax=tmax)
     trials = read_trial_metadata(root, subject)
     trials = pd.DataFrame(trials)
     labels = trials[~(trials.perturbed) & (trials.success)].target_direction.values
@@ -102,6 +118,12 @@ def decode_directionality(
 
     else:
         raise ValueError('domain must be one of "time", "freq", or "frequency".')
+
+    if shuffle:
+        # Shuffle along image rows
+        p = rng.permutation(image_height)
+        data = data.reshape(ntrials, image_height, image_width)
+        data = data[:, p]
 
     X = data.reshape(ntrials, -1)
     y = labels
@@ -254,7 +276,7 @@ if __name__ == "__main__":
     with open(Path(os.path.dirname(__file__)) / "config.yml") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    bids_root = Path(config["bids_root"])
+    root = Path(config["bids_root"])
     results_path = Path(config["results_path"])
 
     seed = 1
@@ -271,8 +293,8 @@ if __name__ == "__main__":
         os.makedirs(destination_path)
 
     decode_directionality(
-        bids_root, subject, destination_path, cv, metrics, "time", random_state=seed
+        root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
     )
-    decode_directionality(
-        bids_root, subject, destination_path, cv, metrics, "freq", random_state=seed
-    )
+    # decode_directionality(
+    #     bids_root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
+    # )

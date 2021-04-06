@@ -192,7 +192,7 @@ def decode_movement(
     #     traceback.print_exc()
 
     if not os.path.exists(destination):
-            os.makedirs(destination)
+        os.makedirs(destination)
 
     for clf_name, clf_scores in cv_scores.items():
 
@@ -208,30 +208,32 @@ def decode_movement(
             cv_scores[clf_name]["estimator"] = estimator
 
     ## Plot results
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-    plot_classifier_performance(cv_scores, X, y, axs=axs)
-    axs[0].set(
-        title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
-    )
-    axs[1].set(
-        title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
-    )
-    fig.tight_layout()
+    # fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+    # axs = axs.flatten()
+    # plot_classifier_performance(cv_scores, X, y, axs=axs)
+    # axs[0].set(
+    #     title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
+    # )
+    # axs[1].set(
+    #     title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
+    # )
+    # fig.tight_layout()
 
-    plt.savefig(destination / f"movement_onset_{domain}_domain.png")
-    plt.close(fig)
-    print(
-        f"Figure saved at {destination}/movement_onset_{domain}_domain.png"
-    )
+    # plt.savefig(destination / f"movement_onset_{domain}_domain.png")
+    # plt.close(fig)
+    # print(
+    #     f"Figure saved at {destination}/movement_onset_{domain}_domain.png"
+    # )
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("subject", type=str, help="subject ID (e.g. efri02)")
+    parser.add_argument("-domain", type=str, help="time or freq domain")
     args = parser.parse_args()
     subject = args.subject
+    domain = args.domain
 
     with open(Path(os.path.dirname(__file__)) / "config.yml") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
@@ -253,8 +255,8 @@ if __name__ == "__main__":
         os.makedirs(destination_path)
 
     decode_movement(
-        bids_root, subject, destination_path, cv, metrics, "time", n_jobs=1, random_state=seed
+        bids_root, subject, destination_path, cv, metrics, domain, n_jobs=1, random_state=seed
     )
-    decode_movement(
-        bids_root, subject, destination_path, cv, metrics, "freq", n_jobs=1, random_state=seed
-    )
+    # decode_movement(
+    #     bids_root, subject, destination_path, cv, metrics, domain, n_jobs=1, random_state=seed
+    # )
