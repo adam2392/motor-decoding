@@ -41,40 +41,34 @@ def decode_directionality(
     cv,
     metrics,
     domain,
-    shuffle=False,
+    shuffle=True,
     n_jobs=1,
     random_state=None,
 ):
     rng = check_random_state(random_state)
+    session = 'efri'
+    task = 'move'
+    acquisition = 'seeg'
+    datatype = 'ieeg'
+    extension = '.vhdr'
+    run = '01'
 
-    tmin, tmax = -0.5, 1.0
-    destination = Path(destination_path) / f"tmin={tmin}_tmax={tmax}_shuffle={shuffle}/{domain}_domain/"
-    # if os.path.exists(destination):
-    #     print(f"Results folder already exists for {domain} domain...terminating")
-    #     return
+    bids_path = BIDSPath(
+        subject=subject, session=session, task=task,
+        acquisition=acquisition, datatype=datatype,
+        run=run, suffix=datatype,
+        extension=extension, root=root)
 
-    # session = 'efri'
-    # task = 'move'
-    # acquisition = 'seeg'
-    # datatype = 'ieeg'
-    # extension = '.vhdr'
-    # run = '01'
+    go_cue_durations = get_event_durations(
+        bids_path, event_key="Left Target", periods=1
+    )
+    left_target_durations = get_event_durations(
+        bids_path, event_key="Left Target", periods=-1
+    )
 
-    # bids_path = BIDSPath(
-    #     subject=subject, session=session, task=task,
-    #     acquisition=acquisition, datatype=datatype,
-    #     run=run, suffix=datatype,
-    #     extension=extension, root=root)
-
-    # go_cue_durations = get_event_durations(
-    #     bids_path, event_key="Left Target", periods=-1
-    # )
-    # left_target_durations = get_event_durations(
-    #     bids_path, event_key="Left Target", periods=1
-    # )
-
-    # tmin = -max(go_cue_durations)
-    # tmax = max(left_target_durations)
+    tmin = -max(go_cue_durations)
+    tmax = max(left_target_durations)
+    destination = Path(destination_path) / f"trial_specific_window_shuffle={shuffle}/{domain}_domain/"
 
     epochs = read_move_trial_epochs(root, subject, tmin=tmin, tmax=tmax)
     trials = read_trial_metadata(root, subject)
@@ -87,6 +81,7 @@ def decode_directionality(
         epochs = epochs.resample(resample_rate)
         data = epochs.get_data()
 
+        t = epochs.times
         ntrials, nchs, nsteps = data.shape
         image_height = nchs
         image_width = nsteps
@@ -112,6 +107,7 @@ def decode_directionality(
         # Transpose to have data shape (ntrials, nchs, nfreqs, nsteps)
         data = np.array(data).transpose(1, 2, 0, 3)
 
+        t = epochs_band.times
         ntrials, nchs, nfreqs, nsteps = data.shape
         image_height = nchs * nfreqs
         image_width = nsteps
@@ -125,7 +121,12 @@ def decode_directionality(
         data = data.reshape(ntrials, image_height, image_width)
         data = data[:, p]
 
-    X = data.reshape(ntrials, -1)
+    mask = (t >= -np.asarray(go_cue_durations)[:, None, None]) \
+            & (t <= np.asarray(left_target_durations)[:, None, None])
+
+    masked_data = data * mask
+
+    X = masked_data.reshape(ntrials, -1)
     y = labels
 
     cv_scores = fit_classifiers_cv(
@@ -296,5 +297,5 @@ if __name__ == "__main__":
         root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
     )
     # decode_directionality(
-    #     bids_root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
+    #     root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
     # )

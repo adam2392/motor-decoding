@@ -205,6 +205,6 @@ if __name__ == "__main__":
     decode_movement_planning(
         root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
     )
-    decode_movement_planning(
-        root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
-    )
+    # decode_movement_planning(
+    #     root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
+    # )

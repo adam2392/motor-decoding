@@ -8,18 +8,18 @@ SCRIPTPATH="$(
 )"
 
 declare -a subjects=(
-  "efri02"
-  "efri06"
-  "efri07"
+  # "efri02"
+  # "efri06"
+  # "efri07"
 #   "efri09"  # Too few samples
 #   "efri10"  # Unequal data size vs label size
-  "efri13"
+  # "efri13"
   "efri14"
-  "efri15"
-  "efri18"
+  # "efri15"
+  # "efri18"
   "efri20"
   "efri25"
-  "efri26"
+  # "efri26"
 )
 
 for subject in "${subjects[@]}"; do
@@ -45,10 +45,10 @@ for subject in "${subjects[@]}"; do
   python "$SCRIPTPATH/decoding_directionality.py" $subject
   echo "Done with Decode Directionality"
 
-  echo "Starting Planning Movement"
-  chmod +x "$SCRIPTPATH/planning_movement.py"
-  python "$SCRIPTPATH/planning_movement.py" $subject
-  echo "Done with Planning Movement"
+  # echo "Starting Planning Movement"
+  # chmod +x "$SCRIPTPATH/planning_movement.py"
+  # python "$SCRIPTPATH/planning_movement.py" $subject
+  # echo "Done with Planning Movement"
 
   # echo "Starting Speed Instruction"
   # chmod +x "$SCRIPTPATH/speed_instruction.py"

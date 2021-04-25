@@ -54,8 +54,46 @@ def bootstrap_independence_test(
         estimates.append(independence_test(Xboot, yboot))
 
     # Get desired lower and upper percentiles of approximate sampling distribution
-    q_low = np.percentile(estimates, Ql * 100)
-    q_up = np.percentile(estimates, Qu * 100)
+    q_low, q_up = np.percentile(estimates, [Ql * 100, Qu * 100])
+
+    return q_low, q_up, estimates
+
+
+def independence_test_GLM(X, y):
+    """Compute point estimates for coefficient between X and y."""
+    covariates = sm.add_constant(X)
+    model = sm.GLM(y, covariates)
+
+    res = model.fit(disp=False)
+    coeff = res.params.iloc[1]
+
+    return coeff
+
+
+def bootstrap_independence_test_GLM(
+    X, y, num_bootstraps=200, alpha=0.05, random_state=None
+):
+    """Bootstrap esitmates for coefficients between X and y."""
+    rng = check_random_state(random_state)
+
+    Ql = alpha / 2
+    Qu = 1 - alpha / 2
+
+    estimates = []
+
+    n = len(X)
+
+    for i in range(num_bootstraps):
+
+        # Compute OR estimate for bootstrap sample
+        inds = rng.randint(n, size=n)
+        Xboot = X.iloc[inds]
+        yboot = y.iloc[inds]
+
+        estimates.append(independence_test_GLM(Xboot, yboot))
+
+    # Get desired lower and upper percentiles of approximate sampling distribution
+    q_low, q_up = np.percentile(estimates, [Ql * 100, Qu * 100])
 
     return q_low, q_up, estimates
 
@@ -96,8 +134,7 @@ def bootstrap_independence_test_OLS(
         estimates[i] = independence_test_OLS(Xboot, yboot)
 
     # Get desired lower and upper percentiles of approximate sampling distribution
-    q_low = np.percentile(estimates, Ql * 100)
-    q_up = np.percentile(estimates, Qu * 100)
+    q_low, q_up = np.percentile(estimates, [Ql * 100, Qu * 100])
 
     return q_low, q_up, estimates
 

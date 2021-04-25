@@ -355,7 +355,7 @@ def cv_fit(
 
     # Appending metrics for computing ROC curve
     scores.update(cv_roc(clf, X, y, cv))
-    scores.udpate({"ytrue": y})
+    scores.update({"ytrue": y})
 
     # Appending model parameters
     if isinstance(clf, KerasClassifier):
@@ -457,7 +457,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
         image_width=image_width,
     )
 
-    lr = LogisticRegression(random_state=random_state)
+    # lr = LogisticRegression(random_state=random_state)
     knn = KNeighborsClassifier()
     rf = RandomForestClassifier(n_estimators=500, random_state=random_state)
     mlp = MLPClassifier(random_state=random_state)
@@ -490,7 +490,7 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
         "ConvNet": cnn, 
         "MT-MORF": mtsmorf, 
         "SPORF": srerf, 
-        "Log. Reg": lr,
+        # "Log. Reg": lr,
         "kNN": knn, 
         "RF": rf, 
         "MLP": mlp, 
