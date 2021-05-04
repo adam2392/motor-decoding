@@ -1,6 +1,58 @@
 import numpy as np
+import pandas as pd
 
-from mtsmorf.io.read import _get_anatomical_bad_chs, get_unperturbed_trial_inds
+from mne_bids.tsv_handler import _from_tsv
+from mne_bids.path import _find_matching_sidecar
+
+
+def _read_ch_anat(bids_path):
+    electrodes_fpath = _find_matching_sidecar(
+        bids_path, suffix="channels", extension=".tsv"
+    )
+    electrodes_tsv = _from_tsv(electrodes_fpath)
+
+    # extract channel names and anatomy
+    ch_names = electrodes_tsv["name"]
+    ch_anat = electrodes_tsv["anat"]
+
+    # create dictionary of ch name to anatomical region
+    ch_anat_dict = {name: anat for name, anat in zip(ch_names, ch_anat)}
+    return ch_anat_dict
+
+
+def _get_anatomical_bad_chs(bids_path):
+    # get the channel anat dict
+    ch_anat_dict = _read_ch_anat(bids_path)
+
+    # get bad channels from anatomy
+    bads = []
+    for ch_name, anat in ch_anat_dict.items():
+        if (
+            anat in ["out", "white matter", "cerebrospinal fluid"]
+            or "ventricle" in anat
+        ):
+            bads.append(ch_name)
+    return bads
+
+
+def get_unperturbed_trial_inds(behav):
+    """Get trial indices where force magnitude > 0."""
+    if not isinstance(behav, pd.DataFrame):
+        behav = pd.DataFrame(behav)
+
+    behav[["successful_trial_flag", "force_magnitude"]] = behav[
+        ["successful_trial_flag", "force_magnitude"]
+    ].apply(pd.to_numeric)
+
+    # filter out failed trials -- we don't want these anyway
+    # successes = behav[behav.successful_trial_flag == 1]
+    # successes.index = np.arange(len(successes))
+
+    # filter out labels for perturbed trials
+    unperturbed_trial_inds = behav[behav.force_magnitude == 0].index
+    unperturbed_trial_inds = unperturbed_trial_inds.to_list()
+
+    return unperturbed_trial_inds
 
 
 def _preprocess_epochs(epochs, resample_rate=500, l_freq=1, h_freq=None):
@@ -13,7 +65,7 @@ def _preprocess_epochs(epochs, resample_rate=500, l_freq=1, h_freq=None):
     # Band-pass filter
     new_epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
 
-    # Downsample epochs to 500 Hz
+    # Downsample epochs
     if resample_rate is not None:
         new_epochs = new_epochs.resample(resample_rate)
 

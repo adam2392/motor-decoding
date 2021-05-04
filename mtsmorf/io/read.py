@@ -14,8 +14,10 @@ from mne_bids.tsv_handler import _from_tsv
 from mne_bids.path import _find_matching_sidecar
 from sklearn.preprocessing import LabelBinarizer
 
-sys.path.append(str(Path(__file__).parent.parent / "io"))
-from utils import NumpyEncoder
+src = Path(__file__).parents[2]
+if src not in sys.path:
+    sys.path.append(str(src))
+from mtsmorf.io.utils import NumpyEncoder
 
 
 def get_trial_info(bids_path, verbose=False):

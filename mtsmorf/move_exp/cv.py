@@ -487,15 +487,15 @@ def initialize_classifiers(image_height, image_width, n_classes, n_jobs=1, rando
     dummy = DummyClassifier(strategy="most_frequent", random_state=random_state)
 
     clfs = {
-        "ConvNet": cnn, 
+        # "ConvNet": cnn, 
         "MT-MORF": mtsmorf, 
-        "SPORF": srerf, 
+        # "SPORF": srerf, 
         # "Log. Reg": lr,
-        "kNN": knn, 
-        "RF": rf, 
-        "MLP": mlp, 
-        "XGB": xgb, 
-        "Dummy": dummy
+        # "kNN": knn, 
+        # "RF": rf, 
+        # "MLP": mlp, 
+        # "XGB": xgb, 
+        # "Dummy": dummy
     }
 
     return clfs

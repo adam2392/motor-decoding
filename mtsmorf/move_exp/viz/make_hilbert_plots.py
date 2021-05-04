@@ -49,7 +49,7 @@ if __name__ == "__main__":
         if not os.path.exists(destination):
             os.makedirs(destination)
 
-        epochs = read_move_trial_epochs(bids_root, subject, resample_rate=None)
+        epochs = read_move_trial_epochs(bids_root, subject, resample_rate=None, tmin=0, tmax=0.25)
         epochs.load_data()
         trials_metadata = pd.DataFrame(read_trial_metadata(bids_root, subject))
         trials_metadata.head()

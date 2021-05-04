@@ -1,6 +1,7 @@
 
 import argparse
 import os
+import sys
 import traceback
 import yaml
 from pathlib import Path
@@ -16,11 +17,14 @@ from rerf.rerfClassifier import rerfClassifier
 from sklearn.metrics import cohen_kappa_score, make_scorer
 from sklearn.model_selection import StratifiedKFold
 
-from cv import cv_fit
-from functions.move_experiment_functions import get_event_data
+src = Path(__file__).parents[2]
+if src not in sys.path:
+    sys.path.append(str(src))
+from mtsmorf.move_exp.cv import cv_fit
+from mtsmorf.move_exp.functions.move_experiment_functions import get_event_data
 
 
-def plot_paired_cvs_baseline(scores1, scores2, axs, random_=1):
+def plot_paired_cvs_baseline(scores1, scores2, axs, random_seed=1):
     id_col = pd.Series(range(1, n_splits + 1))
     axs = axs.flatten()
 

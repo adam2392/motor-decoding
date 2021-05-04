@@ -42,6 +42,9 @@ def decode_directionality(
     metrics,
     domain,
     shuffle=True,
+    l_freq=1,
+    h_freq=None,
+    band="",
     n_jobs=1,
     random_state=None,
 ):
@@ -59,16 +62,19 @@ def decode_directionality(
         run=run, suffix=datatype,
         extension=extension, root=root)
 
-    go_cue_durations = get_event_durations(
-        bids_path, event_key="Left Target", periods=1
-    )
-    left_target_durations = get_event_durations(
-        bids_path, event_key="Left Target", periods=-1
-    )
+    # go_cue_durations = get_event_durations(
+    #     bids_path, event_key="Left Target", periods=1
+    # )
+    # left_target_durations = get_event_durations(
+    #     bids_path, event_key="Left Target", periods=-1
+    # )
 
-    tmin = -max(go_cue_durations)
-    tmax = max(left_target_durations)
-    destination = Path(destination_path) / f"trial_specific_window_shuffle={shuffle}/{domain}_domain/"
+    # tmin = -max(go_cue_durations)
+    # tmax = max(left_target_durations)
+    tmin = 0
+    tmax = 0.25
+    # destination = Path(destination_path) / f"trial_specific_window_shuffle={shuffle}/{domain}_domain/"
+    destination = Path(destination_path) / f"tmin={tmin}_tmax={tmax}_shuffle={shuffle}/{domain}_domain/"
 
     epochs = read_move_trial_epochs(root, subject, tmin=tmin, tmax=tmax)
     trials = read_trial_metadata(root, subject)
@@ -77,7 +83,9 @@ def decode_directionality(
 
     resample_rate = 500
     if domain.lower() == "time":
-        epochs = epochs.filter(l_freq=1, h_freq=epochs.info["sfreq"] / 2.0 - 1)
+        if h_freq is None:
+            h_freq = epochs.info['sfreq'] / 2.0 - 1
+        epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
         epochs = epochs.resample(resample_rate)
         data = epochs.get_data()
 
@@ -121,12 +129,14 @@ def decode_directionality(
         data = data.reshape(ntrials, image_height, image_width)
         data = data[:, p]
 
-    mask = (t >= -np.asarray(go_cue_durations)[:, None, None]) \
-            & (t <= np.asarray(left_target_durations)[:, None, None])
+    # mask = (t >= -np.asarray(go_cue_durations)[:, None, None]) \
+    #         & (t <= np.asarray(left_target_durations)[:, None, None])
 
-    masked_data = data * mask
+    # masked_data = data * mask
 
-    X = masked_data.reshape(ntrials, -1)
+    # X = masked_data.reshape(ntrials, -1)
+    # y = labels
+    X = data.reshape(ntrials, -1)
     y = labels
 
     cv_scores = fit_classifiers_cv(
@@ -208,7 +218,7 @@ def decode_directionality(
         if estimator is not None:
             del clf_scores["estimator"]
 
-        with open(destination / f"{subject}_{clf_name}_results.json", "w") as fout:
+        with open(destination / f"{subject}_{clf_name}_results_{band}.json", "w") as fout:
             json.dump(clf_scores, fout, cls=NumpyEncoder)
             print(f"{subject.upper()} CV results for {clf_name} saved as json.")
         
@@ -251,20 +261,20 @@ def decode_directionality(
     # )
 
     ## Plot results
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-    plot_classifier_performance(cv_scores, X, y, axs=axs)
-    axs[0].set(
-        title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
-    )
-    axs[1].set(
-        title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
-    )
-    fig.tight_layout()
+    # fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+    # axs = axs.flatten()
+    # plot_classifier_performance(cv_scores, X, y, axs=axs)
+    # axs[0].set(
+    #     title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
+    # )
+    # axs[1].set(
+    #     title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
+    # )
+    # fig.tight_layout()
 
-    plt.savefig(destination / f"movement_onset_{domain}_domain.png")
-    plt.close(fig)
-    print(f"Figure saved at {destination}/movement_onset_{domain}_domain.png")
+    # plt.savefig(destination / f"movement_onset_{domain}_domain.png")
+    # plt.close(fig)
+    # print(f"Figure saved at {destination}/movement_onset_{domain}_domain.png")
 
 
 if __name__ == "__main__":
@@ -293,9 +303,23 @@ if __name__ == "__main__":
     if not os.path.exists(destination_path):
         os.makedirs(destination_path)
 
-    decode_directionality(
-        root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
-    )
+    # decode_directionality(
+    #     root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
+    # )
     # decode_directionality(
     #     root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
     # )
+
+    frequency_bands = dict(
+        delta=(0.5, 4),
+        theta=(4, 8),
+        alpha=(8, 13),
+        beta=(13, 30),
+        gamma=(30, 70),
+        hi_gamma=(70, 200),
+    )
+
+    for band, (l_freq, h_freq) in frequency_bands.items():
+        decode_directionality(
+            root, subject, destination_path, cv, metrics, "time", shuffle=True, l_freq=l_freq, h_freq=h_freq, band=band, random_state=seed
+        )

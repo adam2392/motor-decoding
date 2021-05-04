@@ -1,6 +1,8 @@
 import json
+import sys
 from dataclasses import dataclass
 from textwrap import shorten
+from pathlib import Path
 
 import mne
 import numpy as np
@@ -12,6 +14,9 @@ from mne_bids import BIDSPath, read_raw_bids
 from mne_bids.read import _handle_events_reading
 from mne_bids.tsv_handler import _from_tsv
 
+src = Path(__file__).parents[3]
+if src not in sys.path:
+    sys.path.append(str(src))
 from mtsmorf.io.move.utils import _preprocess_raw, _preprocess_epochs, _pl, _get_bad_epochs
 
 
@@ -182,7 +187,7 @@ def compute_xy_metrics(raw, event_key_start, event_key_end,
 
         # compute the metrics
         # like speed
-        df['Time'] = df.index.asi8
+        df['Time'] = df.index.astype('int64')
         dist = df.diff()  # .fillna(0.)
         dist['Dist'] = np.sqrt(dist['x'] ** 2 + dist['y'] ** 2)
         dist['Speed'] = dist.Dist / dist.Time / 2000.
@@ -564,3 +569,15 @@ def read_move_trial_epochs(root, subject, run='01',
                     overwrite=True)
 
     return epochs
+
+
+if __name__ == "__main__":
+    import yaml
+    import os
+    with open(Path(os.path.dirname(__file__)).parents[2] / "mtsmorf/move_exp/config.yml") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+
+    root = Path(config["bids_root"])
+    results_path = Path(config["results_path"])
+    epochs = read_move_trial_epochs(root, "efri07")
+    print(epochs)

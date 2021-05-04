@@ -10,16 +10,16 @@ SCRIPTPATH="$(
 declare -a subjects=(
   # "efri02"
   # "efri06"
-  # "efri07"
+  "efri07"
 #   "efri09"  # Too few samples
 #   "efri10"  # Unequal data size vs label size
-  # "efri13"
+  "efri13"
   "efri14"
-  # "efri15"
-  # "efri18"
+  "efri15"
+  "efri18"
   "efri20"
   "efri25"
-  # "efri26"
+  "efri26"
 )
 
 for subject in "${subjects[@]}"; do
@@ -40,10 +40,10 @@ for subject in "${subjects[@]}"; do
   # python "$SCRIPTPATH/decoding_movement.py" $subject -domain "freq"
   # echo "Done with Decode Movement"
 
-  echo "Starting Decode Directionality"
-  chmod +x "$SCRIPTPATH/decoding_directionality.py"
-  python "$SCRIPTPATH/decoding_directionality.py" $subject
-  echo "Done with Decode Directionality"
+  # echo "Starting Decode Directionality"
+  # chmod +x "$SCRIPTPATH/decoding_directionality.py"
+  # python "$SCRIPTPATH/decoding_directionality.py" $subject
+  # echo "Done with Decode Directionality"
 
   # echo "Starting Planning Movement"
   # chmod +x "$SCRIPTPATH/planning_movement.py"
@@ -55,10 +55,10 @@ for subject in "${subjects[@]}"; do
   # python "$SCRIPTPATH/speed_instruction.py" $subject
   # echo "Done with Speed Instruction"
 
-  # echo "Making patch selection plots"
-  # chmod +x "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py"
-  # python "$SCRIPTPATH/visualization/make_patch_selection_heatmaps.py" $subject
-  # echo "Done with patch selection plots"
+  echo "Making patch selection plots"
+  chmod +x "$SCRIPTPATH/viz/make_patch_selection_heatmaps.py"
+  python "$SCRIPTPATH/viz/make_patch_selection_heatmaps.py" $subject
+  echo "Done with patch selection plots"
 
   echo "Done with $subject..."
 done

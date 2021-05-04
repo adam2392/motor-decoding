@@ -51,13 +51,14 @@ if __name__ == "__main__":
         roc_auc_ovr="roc_auc_ovr",
     )
 
+    tmin, tmax = (0, 0.25)
     destination = (
-        results_path / "decode_directionality" / subject / "hilbert_transform"
+        results_path / "decode_directionality" / subject / "hilbert_transform" / f"tmin={tmin}_tmax={tmax}"
     )
     if not os.path.exists(destination):
         os.makedirs(destination)
 
-    epochs = read_move_trial_epochs(bids_root, subject, resample_rate=None)
+    epochs = read_move_trial_epochs(bids_root, subject, tmin=tmin, tmax=tmax, resample_rate=None)
     epochs.load_data()
     trials_metadata = pd.DataFrame(read_trial_metadata(bids_root, subject))
     trials_metadata.head()
@@ -82,7 +83,9 @@ if __name__ == "__main__":
     X = epochs_data.reshape(ntrials, -1)
     y = labels
 
-    with open(destination / f"{subject}_MT-MORF_time_domain.json", "r") as f:
+    old_results_path = Path(f"/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/workstation_output/mtmorf/decode_directionality/{subject}/tmin=0_tmax=0.25_shuffle=True/time_domain")
+
+    with open(old_results_path / f"{subject}_MT-MORF_results.json", "r") as f:
         scores = json.load(f)
 
     best = np.argmax(scores["test_roc_auc_ovr"])
@@ -124,18 +127,18 @@ if __name__ == "__main__":
     with open(destination / f"{subject}_MT-MORF_time_domain.json", "w") as f:
         json.dump(scores, f)
 
-    fig, ax = plt.subplots(dpi=100, figsize=(10, 16))
-    plot_feature_importances(
-        result,
-        epochs_resampled.ch_names,
-        times=epochs_resampled.times,
-        image_height=nchs,
-        image_width=nsteps,
-        ax=ax,
-    )
-    ax.set_title("Feature Importances (Time Domain)")
-    fig.tight_layout()
-    plt.savefig(destination / f"{subject}_patch_selection_time_domain.png")
+    # fig, ax = plt.subplots(dpi=100, figsize=(10, 16))
+    # plot_feature_importances(
+    #     result,
+    #     epochs_resampled.ch_names,
+    #     times=epochs_resampled.times,
+    #     image_height=nchs,
+    #     image_width=nsteps,
+    #     ax=ax,
+    # )
+    # ax.set_title("Feature Importances (Time Domain)")
+    # fig.tight_layout()
+    # plt.savefig(destination / f"{subject}_patch_selection_time_domain.png")
 
     hilbert_data = {}
     for band, (l_freq, h_freq) in frequency_bands.items():
@@ -152,8 +155,9 @@ if __name__ == "__main__":
         ntrials, nchs, nsteps = data.shape
         X = data.reshape(ntrials, -1)
         y = labels
-
-        with open(destination / f"{subject}_MT-MORF_{band}.json", "r") as f:
+        
+        old_results_path = Path(f"/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/workstation_output/mtmorf/decode_directionality/{subject}/tmin=0_tmax=0.25_shuffle=True/time_domain/")
+        with open(old_results_path / f"{subject}_MT-MORF_results_{band}.json", "r") as f:
             scores[band] = json.load(f)
 
         best = np.argmax(scores[band]["test_roc_auc_ovr"])
@@ -194,18 +198,18 @@ if __name__ == "__main__":
         with open(destination / f"{subject}_MT-MORF_{band}.json", "w") as f:
             json.dump(scores[band], f, cls=NumpyEncoder)
 
-        fig, ax = plt.subplots(dpi=100, figsize=(10, 16))
-        plot_feature_importances(
-            result,
-            epochs_resampled.ch_names,
-            times=epochs_resampled.times,
-            image_height=nchs,
-            image_width=nsteps,
-            ax=ax,
-        )
-        ax.set_title(f"Feature Importances ({band})")
-        fig.tight_layout()
-        plt.savefig(destination / f"{subject}_patch_selection_{band}.png")
+        # fig, ax = plt.subplots(dpi=100, figsize=(10, 16))
+        # plot_feature_importances(
+        #     result,
+        #     epochs_resampled.ch_names,
+        #     times=epochs_resampled.times,
+        #     image_height=nchs,
+        #     image_width=nsteps,
+        #     ax=ax,
+        # )
+        # ax.set_title(f"Feature Importances ({band})")
+        # fig.tight_layout()
+        # plt.savefig(destination / f"{subject}_patch_selection_{band}.png")
 
     data = np.stack(list(hilbert_data.values()), axis=2)
 

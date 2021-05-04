@@ -16,6 +16,7 @@ if os.path.abspath(Path(__file__).parents[2]) not in sys.path:
     sys.path.append(os.path.abspath(Path(__file__).parents[2]))
 
 from mtsmorf.io.move.read import read_move_trial_epochs, read_trial_metadata
+from mtsmorf.move_exp.preprocess import get_event_data
 from mtsmorf.io.utils import NumpyEncoder
 from sklearn.utils import check_random_state
 from sklearn.dummy import DummyClassifier
@@ -24,7 +25,7 @@ import yaml
 
 def read_cohort_movement_data(root, cohort, picks, resample_rate=500):
     data = []
-    labels = []
+    all_labels = []
     groups = []
 
     for subject in cohort:
@@ -41,7 +42,7 @@ def read_cohort_movement_data(root, cohort, picks, resample_rate=500):
             run=run, suffix=datatype,
             extension=extension, root=root)
         
-        before = read_move_trial_epochs(root, subject, event_key="At Center", tmin=0, tmax=1.0)
+        before = read_move_trial_epochs(root, subject, event_key="At Center", tmin=0, tmax=1.)
         before = before.pick(picks[subject])
         before.load_data()
         after = read_move_trial_epochs(root, subject, event_key="Left Target", tmin=-0.25, tmax=0.75)
@@ -52,55 +53,38 @@ def read_cohort_movement_data(root, cohort, picks, resample_rate=500):
         before = before.filter(l_freq=1, h_freq=before.info["sfreq"] / 2. - 1)
         before = before.resample(resample_rate)
         data.append(before.get_data())
-        labels.append([0] * len(before))
+        all_labels.append([0] * len(before))
         groups.extend([subject] * len(before))
 
         # Get data for after movement onset
         after = after.filter(l_freq=1, h_freq=after.info["sfreq"] / 2. - 1)
         after = after.resample(resample_rate)
         data.append(after.get_data())
-        labels.append([1] * len(after))
+        all_labels.append([1] * len(after))
         groups.extend([subject] * len(after))
 
     data = np.vstack(data)
-    labels = np.hstack(labels)
+    all_labels = np.hstack(all_labels)
 
-    assert data.shape[0] == labels.shape[0], f"Unequal array lengths: {data.shape[0]} and {labels.shape[0]}"
+    assert data.shape[0] == all_labels.shape[0], f"Unequal array lengths: {data.shape[0]} and {all_labels.shape[0]}"
     
-    return data, labels, groups
+    return data, all_labels, groups
 
 
 def read_cohort_directionality_data(root, cohort, picks, tmin=0, tmax=0.25, resample_rate=500, return_epochs=False):
     data = []
-    labels = []
+    all_labels = []
     groups = []
     if return_epochs:
         epochs_dict = {}
 
     for subject in cohort:
-        session = 'efri'
-        task = 'move'
-        acquisition = 'seeg'
-        datatype = 'ieeg'
-        extension = '.vhdr'
-        run = '01'
-
-        bids_path = BIDSPath(
-            subject=subject, session=session, task=task,
-            acquisition=acquisition, datatype=datatype,
-            run=run, suffix=datatype,
-            extension=extension, root=root)
-
-        epochs = read_move_trial_epochs(root, subject, tmin=tmin, tmax=tmax)
+        epochs, labels = get_event_data(root, subject, tmin=tmin, tmax=tmax, resample_rate=None)
         epochs = epochs.pick(picks[subject])
-        trials = read_trial_metadata(root, subject)
-        trials = pd.DataFrame(trials)
-        labels.append(
-            trials[~(trials.perturbed) & (trials.success)].target_direction.values
-        )
-        
         epochs = epochs.filter(l_freq=1, h_freq=epochs.info["sfreq"] / 2.0 - 1)
         epochs = epochs.resample(resample_rate)
+
+        all_labels.append(labels)
         data.append(epochs.get_data())
         groups.extend([subject] * len(epochs))
 
@@ -108,47 +92,30 @@ def read_cohort_directionality_data(root, cohort, picks, tmin=0, tmax=0.25, resa
             epochs_dict[subject] = epochs
 
     data = np.vstack(data)
-    labels = np.hstack(labels)
+    all_labels = np.hstack(all_labels)
 
-    assert data.shape[0] == labels.shape[0], f"Unequal array lengths: {data.shape[0]} and {labels.shape[0]}"
+    assert data.shape[0] == all_labels.shape[0], f"Unequal array lengths: {data.shape[0]} and {all_labels.shape[0]}"
     
     if return_epochs:
-        return data, labels, groups, epochs_dict
+        return data, all_labels, groups, epochs_dict
 
-    return data, labels, groups
+    return data, all_labels, groups
 
 
 def read_cohort_planning_data(root, cohort, picks, tmin=-0.5, tmax=0, resample_rate=500, return_epochs=False):
     data = []
-    labels = []
+    all_labels = []
     groups = []
     if return_epochs:
         epochs_dict = {}
 
     for subject in cohort:
-        session = 'efri'
-        task = 'move'
-        acquisition = 'seeg'
-        datatype = 'ieeg'
-        extension = '.vhdr'
-        run = '01'
-
-        bids_path = BIDSPath(
-            subject=subject, session=session, task=task,
-            acquisition=acquisition, datatype=datatype,
-            run=run, suffix=datatype,
-            extension=extension, root=root)
-
-        epochs = read_move_trial_epochs(root, subject, tmin=tmin, tmax=tmax)
-        epochs = epochs.pick(picks[subject])
-        trials = read_trial_metadata(root, subject)
-        trials = pd.DataFrame(trials)
-        labels.append(
-            trials[~(trials.perturbed) & (trials.success)].target_direction.values
-        )
-        
+        epochs, labels = get_event_data(root, subject, tmin=tmin, tmax=tmax, resample_rate=None)        
+        epochs = epochs.pick(picks[subject])        
         epochs = epochs.filter(l_freq=1, h_freq=epochs.info["sfreq"] / 2.0 - 1)
         epochs = epochs.resample(resample_rate)
+
+        all_labels.append(labels)
         data.append(epochs.get_data())
         groups.extend([subject] * len(epochs))
 
@@ -156,14 +123,14 @@ def read_cohort_planning_data(root, cohort, picks, tmin=-0.5, tmax=0, resample_r
             epochs_dict[subject] = epochs
 
     data = np.vstack(data)
-    labels = np.hstack(labels)
+    all_labels = np.hstack(all_labels)
 
-    assert data.shape[0] == labels.shape[0], f"Unequal array lengths: {data.shape[0]} and {labels.shape[0]}"
+    assert data.shape[0] == all_labels.shape[0], f"Unequal array lengths: {data.shape[0]} and {all_labels.shape[0]}"
     
     if return_epochs:
-        return data, labels, groups, epochs_dict
+        return data, all_labels, groups, epochs_dict
 
-    return data, labels, groups
+    return data, all_labels, groups
 
 if __name__ == "__main__":
     cohort = [
