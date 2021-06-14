@@ -51,9 +51,13 @@ if __name__ == "__main__":
         roc_auc_ovr="roc_auc_ovr",
     )
 
-    tmin, tmax = (0, 0.25)
+    # tmin, tmax = (0, 0.25)  # Decode directionality
+    # tmin, tmax = (-0.5, 0.0)  # Planning movement
+    tmin, tmax = (-0.25, 0.0)  # Planning movement
+    shuffle = False
     destination = (
-        results_path / "decode_directionality" / subject / "hilbert_transform" / f"tmin={tmin}_tmax={tmax}"
+        # results_path / "decode_directionality" / subject / "hilbert_transform" / f"tmin={tmin}_tmax={tmax}"
+        results_path / "planning_movement" / subject / "hilbert_transform" / f"tmin={tmin}_tmax={tmax}"
     )
     if not os.path.exists(destination):
         os.makedirs(destination)
@@ -83,49 +87,47 @@ if __name__ == "__main__":
     X = epochs_data.reshape(ntrials, -1)
     y = labels
 
-    old_results_path = Path(f"/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/workstation_output/mtmorf/decode_directionality/{subject}/tmin=0_tmax=0.25_shuffle=True/time_domain")
+    # with open(old_results_path / f"{subject}_MT-MORF_results.json", "r") as f:
+    #     scores = json.load(f)
 
-    with open(old_results_path / f"{subject}_MT-MORF_results.json", "r") as f:
-        scores = json.load(f)
+    # best = np.argmax(scores["test_roc_auc_ovr"])
+    # best_train_inds = scores["train_inds"][best]
+    # best_test_inds = scores["test_inds"][best]
 
-    best = np.argmax(scores["test_roc_auc_ovr"])
-    best_train_inds = scores["train_inds"][best]
-    best_test_inds = scores["test_inds"][best]
+    # Xtest = X[best_test_inds]
+    # ytest = y[best_test_inds]
 
-    Xtest = X[best_test_inds]
-    ytest = y[best_test_inds]
+    # best_clf = rerfClassifier(
+    #     projection_matrix="MT-MORF",
+    #     max_features="auto",
+    #     n_jobs=-1,
+    #     random_state=rng,
+    #     image_height=nchs,
+    #     image_width=nsteps,
+    # )
+    # best_clf.fit(X[best_train_inds], y[best_train_inds])
 
-    best_clf = rerfClassifier(
-        projection_matrix="MT-MORF",
-        max_features="auto",
-        n_jobs=-1,
-        random_state=rng,
-        image_height=nchs,
-        image_width=nsteps,
-    )
-    best_clf.fit(X[best_train_inds], y[best_train_inds])
+    # result = randomized_patch_selection(
+    #     best_clf,
+    #     Xtest,
+    #     ytest,
+    #     nchs,
+    #     nsteps,
+    #     patch_height=5,
+    #     patch_width=20,
+    #     n_patches=2500,
+    #     scoring="roc_auc_ovr",
+    #     n_repeats=5,
+    #     n_jobs=1,
+    #     random_state=rng,
+    # )
+    # scores["validate_roc_auc_ovr_imp_mean"] = result.importances_mean.tolist()
+    # scores["validate_roc_auc_ovr_importances"] = result.importances.tolist()
+    # scores["validate_roc_auc_ovr_patch_inds"] = result.patch_inds.tolist()
+    # scores["validate_roc_auc_ovr_usage_counts"] = result.usage_counts.tolist()
 
-    result = randomized_patch_selection(
-        best_clf,
-        Xtest,
-        ytest,
-        nchs,
-        nsteps,
-        patch_height=5,
-        patch_width=20,
-        n_patches=2500,
-        scoring="roc_auc_ovr",
-        n_repeats=5,
-        n_jobs=1,
-        random_state=rng,
-    )
-    scores["validate_roc_auc_ovr_imp_mean"] = result.importances_mean.tolist()
-    scores["validate_roc_auc_ovr_importances"] = result.importances.tolist()
-    scores["validate_roc_auc_ovr_patch_inds"] = result.patch_inds.tolist()
-    scores["validate_roc_auc_ovr_usage_counts"] = result.usage_counts.tolist()
-
-    with open(destination / f"{subject}_MT-MORF_time_domain.json", "w") as f:
-        json.dump(scores, f)
+    # with open(destination / f"{subject}_MT-MORF_time_domain.json", "w") as f:
+    #     json.dump(scores, f)
 
     # fig, ax = plt.subplots(dpi=100, figsize=(10, 16))
     # plot_feature_importances(
@@ -156,7 +158,7 @@ if __name__ == "__main__":
         X = data.reshape(ntrials, -1)
         y = labels
         
-        old_results_path = Path(f"/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/workstation_output/mtmorf/decode_directionality/{subject}/tmin=0_tmax=0.25_shuffle=True/time_domain/")
+        old_results_path = Path(f"/Users/ChesterHuynh/OneDrive - Johns Hopkins/efri/derivatives/workstation_output/mtmorf/planning_movement/{subject}/tmin={tmin}_tmax={tmax}_shuffle={shuffle}/time_domain/")
         with open(old_results_path / f"{subject}_MT-MORF_results_{band}.json", "r") as f:
             scores[band] = json.load(f)
 

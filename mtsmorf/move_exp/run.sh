@@ -8,8 +8,8 @@ SCRIPTPATH="$(
 )"
 
 declare -a subjects=(
-  # "efri02"
-  # "efri06"
+  "efri02"
+  "efri06"
   "efri07"
 #   "efri09"  # Too few samples
 #   "efri10"  # Unequal data size vs label size

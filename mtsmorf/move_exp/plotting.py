@@ -387,7 +387,7 @@ def plot_roc_multiclass_cv(
     n_classes = len(np.unique(y))
 
     # Compute ROC metrics for each fold
-    for i, (y_pred_proba, test) in enumerate(zip(y_pred_probas, test_inds)):
+    for y_pred_proba, test in zip(y_pred_probas, test_inds):
         y_test = y[test]
         y_pred_proba = np.array(y_pred_proba)
 

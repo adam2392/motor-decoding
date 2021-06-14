@@ -321,5 +321,5 @@ if __name__ == "__main__":
 
     for band, (l_freq, h_freq) in frequency_bands.items():
         decode_directionality(
-            root, subject, destination_path, cv, metrics, "time", shuffle=True, l_freq=l_freq, h_freq=h_freq, band=band, random_state=seed
+            root, subject, destination_path, cv, metrics, "time", shuffle=False, l_freq=l_freq, h_freq=h_freq, band=band, random_state=seed
         )

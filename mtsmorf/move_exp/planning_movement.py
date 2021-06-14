@@ -42,6 +42,9 @@ def decode_movement_planning(
     metrics,
     domain,
     shuffle=True,
+    l_freq=1,
+    h_freq=None,
+    band="",
     n_jobs=1,
     random_state=None,
 ):
@@ -60,25 +63,29 @@ def decode_movement_planning(
         run=run, suffix=datatype,
         extension=extension, root=root)
 
-    go_cue_durations = get_event_durations(
-        bids_path, event_key="Go Cue", periods=-1
-    )
+    # go_cue_durations = get_event_durations(
+    #     bids_path, event_key="Left Target", periods=-1
+    # )
 
-    tmin = 0.0
-    tmax = max(go_cue_durations)
+    # tmin = 0.0
+    # tmax = max(go_cue_durations)
+    tmin, tmax = -0.25, 0.0
     destination = Path(destination_path) / f"tmin={tmin}_tmax={tmax}_shuffle={shuffle}/{domain}_domain/"
 
-    epochs = read_move_trial_epochs(root, subject, event_key="Go Cue", tmin=tmin, tmax=tmax)
+    epochs = read_move_trial_epochs(root, subject, event_key="Left Target", tmin=tmin, tmax=tmax)
     trials = read_trial_metadata(root, subject)
     trials = pd.DataFrame(trials)
     labels = trials.query("perturbed == False & success == True").target_direction.values
 
     resample_rate = 500
     if domain.lower() == "time":
-        epochs = epochs.filter(l_freq=1, h_freq=epochs.info["sfreq"] / 2.0 - 1)
+        if h_freq is None:
+            h_freq = epochs.info['sfreq'] / 2.0 - 1
+        epochs = epochs.filter(l_freq=l_freq, h_freq=h_freq)
         epochs = epochs.resample(resample_rate)
         data = epochs.get_data()
 
+        t = epochs.times
         ntrials, nchs, nsteps = data.shape
         image_height = nchs
         image_width = nsteps
@@ -152,7 +159,7 @@ def decode_movement_planning(
         if estimator is not None:
             del clf_scores["estimator"]
 
-        with open(destination / f"{subject}_{clf_name}_results.json", "w") as fout:
+        with open(destination / f"{subject}_{clf_name}_results_{band}.json", "w") as fout:
             json.dump(clf_scores, fout, cls=NumpyEncoder)
             print(f"{subject.upper()} CV results for {clf_name} saved as json.")
         
@@ -160,20 +167,20 @@ def decode_movement_planning(
             clf_scores["estimator"] = estimator
 
     ## Plot results
-    fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
-    axs = axs.flatten()
-    plot_classifier_performance(cv_scores, X, y, axs=axs)
-    axs[0].set(
-        title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
-    )
-    axs[1].set(
-        title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
-    )
-    fig.tight_layout()
+    # fig, axs = plt.subplots(ncols=2, dpi=100, figsize=(16, 6))
+    # axs = axs.flatten()
+    # plot_classifier_performance(cv_scores, X, y, axs=axs)
+    # axs[0].set(
+    #     title=f"{subject.upper()} ROC Curves for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
+    # )
+    # axs[1].set(
+    #     title=f"{subject.upper()}: Accuracies for 'At Center' vs. 'Left Target' ({domain.capitalize()} Domain)",
+    # )
+    # fig.tight_layout()
 
-    plt.savefig(destination / f"movement_planning_performance_{domain}_domain.png")
-    plt.close(fig)
-    print(f"Figure saved at {destination}/movement_planning_performance_{domain}_domain.png")
+    # plt.savefig(destination / f"movement_planning_performance_{domain}_domain.png")
+    # plt.close(fig)
+    # print(f"Figure saved at {destination}/movement_planning_performance_{domain}_domain.png")
 
 
 if __name__ == "__main__":
@@ -202,9 +209,24 @@ if __name__ == "__main__":
     if not os.path.exists(destination_path):
         os.makedirs(destination_path)
 
-    decode_movement_planning(
-        root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
-    )
+    # decode_movement_planning(
+    #     root, subject, destination_path, cv, metrics, "time", shuffle=True, random_state=seed
+    # )
+
     # decode_movement_planning(
     #     root, subject, destination_path, cv, metrics, "freq", shuffle=True, random_state=seed
     # )
+
+    frequency_bands = dict(
+        delta=(0.5, 4),
+        theta=(4, 8),
+        alpha=(8, 13),
+        beta=(13, 30),
+        gamma=(30, 70),
+        hi_gamma=(70, 200),
+    )
+
+    for band, (l_freq, h_freq) in frequency_bands.items():
+        decode_movement_planning(
+            root, subject, destination_path, cv, metrics, "time", shuffle=False, l_freq=l_freq, h_freq=h_freq, band=band, random_state=seed
+        )

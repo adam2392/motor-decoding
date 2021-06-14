@@ -360,10 +360,17 @@ def cv_fit(
     # Appending model parameters
     if isinstance(clf, KerasClassifier):
         params = clf.get_params()
+
         # Delete callable in KerasClassifier JSON
+        build_fn = None
         if params.get("build_fn") is not None:
+            build_fn = params["build_fn"]
             del params["build_fn"]
         scores["model_params"] = params
+
+        if build_fn is not None:
+            params["build_fn"] = build_fn
+
     else:
         scores["model_params"] = clf.get_params()
 
